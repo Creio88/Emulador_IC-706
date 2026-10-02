@@ -1,0 +1,2339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>IC-706MKIIG Emulator — Rede QSO</title>
+<style>
+  :root{
+    --body-grey:#2e3033; --body-grey-dark:#1e2022; --panel-line:#111213;
+    --lcd-bg:#8b93a0; --lcd-bg-dark:#6e7684; --lcd-seg:#1b2028; --lcd-seg-dim:rgba(27,32,40,0.14);
+    --btn:#45484b; --btn-dark:#2a2c2f; --btn-text:#dcdcdc; --amber:#e8b23d;
+    --led-red:#e0392b; --led-green:#4caf50; --knob:#1c1d1f; --knob-ring:#08090a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100%;background:#151617;color:var(--btn-text);
+    font-family:'Segoe UI',Arial,sans-serif;display:flex;justify-content:center;}
+  #wrap{padding:20px;width:100%;max-width:1040px;}
+  #rig{background:
+      repeating-linear-gradient(100deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px),
+      linear-gradient(180deg,var(--body-grey) 0%,var(--body-grey-dark) 100%);
+    border-radius:10px;padding:16px 18px 20px;box-shadow:0 20px 50px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+    border:1px solid #1a1b1c;position:relative;}
+  #rig::before, #rig::after, #rig .screw-tl, #rig .screw-tr{content:'';position:absolute;width:7px;height:7px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #6a6d70, #202224 70%);box-shadow:inset 0 0 2px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.06);}
+  #rig::before{top:9px;left:9px;}
+  #rig::after{top:9px;right:9px;}
+  #rig .screw-tl{bottom:9px;left:9px;}
+  #rig .screw-tr{bottom:9px;right:9px;}
+  #brand{display:flex;justify-content:space-between;align-items:flex-start;padding:0 4px 10px;}
+  #brand .logo{font-size:15px;letter-spacing:1px;font-weight:700;color:#d7d5cd;}
+  #brand .model{font-size:11px;color:#a9aca9;letter-spacing:0.5px;margin-top:2px;}
+  #brand .hf{font-size:10px;color:#9a9d9a;text-align:right;line-height:1.5;}
+  #top-row{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  #lcd-frame{flex:1 1 380px;background:linear-gradient(180deg,#212324,#171819);border-radius:6px;padding:10px 12px;
+    border:1px solid #0e0f10;box-shadow:inset 0 2px 6px rgba(0,0,0,0.6);}
+  #lcd{background:linear-gradient(180deg,var(--lcd-bg) 0%,var(--lcd-bg-dark) 100%);border-radius:3px;
+    padding:8px 12px 6px;min-height:96px;position:relative;transition:opacity .25s;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,0.35);overflow:hidden;}
+  #lcd::after{content:'';position:absolute;top:0;left:-20%;width:55%;height:100%;
+    background:linear-gradient(115deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 35%, transparent 60%);
+    pointer-events:none;}
+  #lcd.off{opacity:0.08;}
+  #lcd .rowtop{display:flex;justify-content:space-between;align-items:flex-end;}
+  #freq-display{font-family:'Courier New', monospace;font-size:38px;font-weight:700;letter-spacing:1px;
+    color:var(--lcd-seg);line-height:1;user-select:none;position:relative;}
+  #freq-display::before{content:'88.888.88';position:absolute;inset:0;z-index:-1;
+    color:var(--lcd-seg);opacity:0.09;}
+  #freq-display .khz-sub{font-size:20px;vertical-align:2px;}
+  #mode-badge{font-size:14px;font-weight:700;color:var(--lcd-seg);border:2px solid var(--lcd-seg);border-radius:3px;
+    padding:2px 6px;letter-spacing:1px;box-shadow:inset 0 1px 2px rgba(27,32,40,0.3);}
+  #lcd .rowmeta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:10px;
+    color:var(--lcd-seg);letter-spacing:0.5px;font-weight:600;}
+  #meta-left{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  .tag{padding:1px 5px;border:1px solid var(--lcd-seg);border-radius:2px;opacity:0.25;}
+  .tag.active{opacity:1;box-shadow:inset 0 1px 1px rgba(27,32,40,0.25);}
+  #smeter{display:flex;gap:2px;align-items:flex-end;height:14px;margin-top:6px;}
+  #smeter .seg{width:5px;background:var(--lcd-seg-dim);border-radius:1px;}
+  #smeter .seg.on{background:var(--lcd-seg);}
+  #smeter .seg.on.hi{background:#b23a2e;}
+  #smeter-label{font-size:9px;color:var(--lcd-seg);opacity:0.6;margin-top:1px;letter-spacing:1px;}
+  #band-conditions{font-size:9px;color:var(--lcd-seg);opacity:0.75;margin-top:3px;letter-spacing:0.3px;}
+  #right-stack{width:150px;display:flex;flex-direction:column;gap:8px;}
+  #wf-frame{background:#0c0d0e;border-radius:6px;border:1px solid #1a1b1c;padding:6px 8px 4px;margin-bottom:12px;}
+  #spectrum-canvas{width:100%;height:90px;display:block;background:#050810;border-radius:3px 3px 0 0;}
+  #wf-canvas{width:100%;height:60px;display:block;border-radius:0 0 3px 3px;background:#050606;border-top:1px solid #000;}
+  #ruler-canvas{width:100%;height:22px;display:block;background:#08090a;border-radius:0 0 3px 3px;}
+  #logbook-panel{background:#101112;border:1px solid #060707;border-radius:5px;padding:8px;margin-bottom:8px;}
+  #logbook-table{max-height:140px;overflow-y:auto;font-size:11px;}
+  #logbook-table table{width:100%;border-collapse:collapse;}
+  #logbook-table th{text-align:left;color:#7a7d7f;font-size:9px;font-weight:600;padding:2px 6px;border-bottom:1px solid #2a2c2e;}
+  #logbook-table td{padding:2px 6px;color:#dcdad2;border-bottom:1px solid #1a1b1c;font-family:'Courier New',monospace;}
+  #logbook-empty{color:#5a5d5f;font-size:11px;padding:6px;}
+  #logbook-actions{display:flex;gap:6px;margin-top:8px;}
+  #cluster-panel{background:#101112;border:1px solid #060707;border-radius:5px;padding:8px;margin-bottom:8px;}
+  #cluster-hint{font-size:9px;color:#7a7d7f;margin-bottom:6px;line-height:1.4;}
+  #cluster-list{max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+  .spot-row{display:flex;justify-content:space-between;align-items:center;background:#1a1c1d;border:1px solid #2a2c2e;
+    border-radius:4px;padding:5px 8px;cursor:pointer;font-size:11px;}
+  .spot-row:hover{border-color:var(--amber);}
+  .spot-row .spot-freq{font-family:'Courier New',monospace;color:var(--amber);font-weight:700;}
+  .spot-row .spot-cs{color:#dcdad2;}
+  .spot-row .spot-ts{color:#7a7d7f;font-size:9px;}
+  #cluster-empty{color:#5a5d5f;font-size:11px;padding:6px;}
+  #scope-panel{background:#101112;border:1px solid #060707;border-radius:5px;padding:10px;margin-bottom:8px;}
+  #scope-hint{font-size:9px;color:#7a7d7f;margin-bottom:8px;line-height:1.4;}
+  #scope-bars{display:flex;align-items:flex-end;gap:3px;height:60px;}
+  .scope-bar{flex:1;background:#2a2c2e;border-radius:2px 2px 0 0;min-height:3px;position:relative;transition:height .3s;}
+  .scope-bar.current{background:var(--amber);}
+  #scope-scale{display:flex;justify-content:space-between;font-size:9px;color:#5a5d5f;margin-top:4px;}
+  #mem-panel{background:#101112;border:1px solid #060707;border-radius:5px;padding:10px;margin-bottom:8px;}
+  #mem-hint{font-size:9px;color:#7a7d7f;margin-bottom:8px;line-height:1.4;}
+  #mem-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+  .mem-slot{background:#1a1c1d;border:1px solid #2a2c2e;border-radius:5px;padding:6px 4px;text-align:center;cursor:pointer;}
+  .mem-slot.filled{border-color:#3a3d40;}
+  .mem-slot.scanning{border-color:var(--amber);box-shadow:0 0 6px rgba(232,178,61,0.5);}
+  .mem-slot .mem-num{font-size:9px;color:#7a7d7f;}
+  .mem-slot .mem-freq{font-family:'Courier New',monospace;font-size:11px;color:var(--amber);font-weight:700;}
+  .mem-slot .mem-mode{font-size:9px;color:#9a9d9a;}
+  .mem-slot .mem-write{font-size:8px;padding:2px 5px;margin-top:3px;background:#2a2c2e;border:1px solid #3a3d40;border-radius:3px;color:#c8c6bd;cursor:pointer;}
+  #help-panel{background:#101112;border:1px solid #060707;border-radius:5px;padding:8px 10px;margin-bottom:8px;}
+  #help-table{width:100%;border-collapse:collapse;font-size:11px;}
+  #help-table td{padding:4px 8px 4px 0;vertical-align:top;border-bottom:1px solid #1a1b1c;}
+  #help-table td:first-child{color:var(--amber);font-weight:700;white-space:nowrap;width:1%;}
+  #help-table td:last-child{color:#c8c6bd;line-height:1.4;}
+  #help-tech-note{margin-top:8px;padding-top:8px;border-top:1px solid #2a2c2e;font-size:10px;color:#7a7d7f;line-height:1.5;}
+
+  @media (max-width: 720px){
+    #wrap{padding:8px;}
+    #rig{padding:12px 10px 16px;}
+    #brand{flex-direction:column;gap:4px;}
+    #brand .hf{text-align:left;}
+    #top-row{flex-direction:column;}
+    #right-stack{flex-direction:row;width:100%;flex-wrap:wrap;}
+    #right-stack .mini-knob-block{flex:1 1 90px;}
+    #pwr-btn{flex:1 1 100%;order:-1;}
+    #freq-display{font-size:30px;}
+    #freq-display .khz-sub{font-size:16px;}
+    #mid-row{flex-direction:column;align-items:stretch;}
+    #vfo-block{width:100%;}
+    #vfo{width:120px;height:120px;margin:0 auto;}
+    #bottom-row{flex-wrap:wrap;}
+    .knob-block{min-width:60px;}
+    #tx-controls{flex-direction:column;}
+    #ptt-btn{width:100%;height:56px;}
+    #wf-canvas{height:40px;}
+    #spectrum-canvas{height:60px;}
+    #ruler-canvas{height:18px;}
+    .btn-row .rig-btn{min-width:30%;font-size:9px;padding:9px 2px;}
+    #net-head{flex-direction:column;align-items:flex-start;gap:4px;}
+  }
+  .mini-knob-block{background:var(--btn-dark);border-radius:6px;padding:6px 6px 8px;text-align:center;border:1px solid #1a1b1c;}
+  .mini-knob-block .lbl{font-size:9px;color:#c8c6bd;letter-spacing:0.5px;margin-top:4px;}
+  .knob{width:44px;height:44px;border-radius:50%;
+    background:
+      repeating-conic-gradient(from 0deg, rgba(0,0,0,0.35) 0deg 2deg, rgba(255,255,255,0.04) 2deg 4deg),
+      radial-gradient(circle at 35% 30%, #3a3c3e, var(--knob) 55%, var(--knob-ring) 100%);
+    margin:0 auto;position:relative;cursor:ns-resize;box-shadow:0 2px 4px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1), inset 0 0 0 6px rgba(0,0,0,0.25);}
+  .knob::before{content:'';position:absolute;inset:7px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #45484b, #202224 70%);box-shadow:inset 0 1px 2px rgba(255,255,255,0.08);}
+  .knob::after{content:'';position:absolute;top:5px;left:50%;width:2px;height:11px;background:#d8d6cc;
+    transform-origin:1px 15px;transform:translateX(-50%) rotate(var(--rot,0deg));border-radius:1px;z-index:1;}
+  #pwr-btn{width:100%;padding:8px 0;border-radius:6px;border:1px solid #1a1b1c;
+    background:linear-gradient(180deg,#4a4d50,#2c2e30);color:#e8e6df;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;}
+  #pwr-btn.on{background:linear-gradient(180deg,#3f6b3f,#2a4a2a);color:#d9f2d9;}
+  #pwr-led{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3a1414;margin-right:6px;}
+  #pwr-led.on{background:var(--led-green);box-shadow:0 0 6px var(--led-green);}
+  #mid-row{display:flex;gap:14px;flex-wrap:wrap;}
+  #vfo-block{display:flex;flex-direction:column;align-items:center;gap:6px;width:170px;}
+  #vfo{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 32% 28%, #4a4d50, #26282a 55%, #101112 100%);
+    box-shadow:0 6px 14px rgba(0,0,0,0.55), inset 0 2px 3px rgba(255,255,255,0.12), inset 0 -6px 10px rgba(0,0,0,0.5);
+    position:relative;cursor:grab;touch-action:none;}
+  #vfo:active{cursor:grabbing;}
+  #vfo::before{content:'';position:absolute;inset:14px;border-radius:50%;
+    background:repeating-conic-gradient(#3d4042 0deg 2deg, #2a2c2e 2deg 8deg);box-shadow:inset 0 0 10px rgba(0,0,0,0.6);}
+  #vfo-pointer{position:absolute;top:6px;left:50%;width:3px;height:20px;background:var(--amber);
+    transform:translateX(-50%);border-radius:2px;box-shadow:0 0 4px var(--amber);}
+  #vfo-label{font-size:10px;color:#c8c6bd;letter-spacing:1.5px;}
+  #step-row{display:flex;gap:4px;}
+  .step-btn{font-size:9px;padding:4px 6px;border-radius:3px;border:1px solid #1a1b1c;background:var(--btn);color:var(--btn-text);cursor:pointer;}
+  .step-btn.active{background:var(--amber);color:#2a1c00;font-weight:700;}
+  #freq-entry-row{display:flex;gap:4px;width:100%;margin-top:4px;}
+  #freq-entry{flex:1;min-width:0;background:#101112;border:1px solid #2a2c2e;border-radius:4px;padding:6px 8px;
+    color:#dcdad2;font-size:12px;font-family:'Courier New',monospace;}
+  #btn-grid{flex:1 1 300px;display:flex;flex-direction:column;gap:6px;}
+  .btn-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .rig-btn{flex:1;min-width:38px;background:linear-gradient(180deg,#4a4d50,#2c2e30);border:1px solid #1a1b1c;border-radius:4px;
+    color:var(--btn-text);font-size:10px;font-weight:600;letter-spacing:0.3px;padding:8px 2px;cursor:pointer;text-align:center;
+    box-shadow:0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);}
+  .rig-btn:active{transform:translateY(1px);box-shadow:0 1px 0 rgba(0,0,0,0.4);}
+  .rig-btn.active{background:linear-gradient(180deg,#caa23a,#8a6c1f);color:#241a00;}
+  .rig-btn.mode-btn.active{background:linear-gradient(180deg,#3f6b3f,#2a4a2a);color:#dff5df;}
+  #bottom-row{display:flex;gap:10px;margin-top:12px;align-items:flex-end;flex-wrap:wrap;}
+  .knob-block{background:var(--btn-dark);border-radius:6px;padding:8px 6px;text-align:center;border:1px solid #1a1b1c;flex:1;min-width:70px;}
+  .knob-block .lbl{font-size:9px;color:#c8c6bd;letter-spacing:0.5px;margin-top:5px;}
+
+  /* ---- QSO / net panel ---- */
+  #net-panel{margin-top:14px;background:var(--btn-dark);border-radius:8px;padding:12px;border:1px solid #1a1b1c;}
+  #net-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
+  #net-head .chan{font-size:11px;color:var(--amber);font-weight:700;letter-spacing:0.5px;}
+  #net-warn{font-size:10px;color:#c9a24a;background:rgba(232,178,61,0.08);border:1px solid rgba(232,178,61,0.3);
+    padding:6px 8px;border-radius:4px;margin-bottom:8px;line-height:1.5;}
+  #roster-row{font-size:10px;color:#9a9d9a;margin-bottom:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  #roster-title{color:#7a7d7f;}
+  .roster-chip{background:#2a2c2e;border:1px solid #3a3d40;border-radius:10px;padding:1px 8px;color:#dcdad2;}
+  .roster-chip.self{border-color:var(--amber);color:var(--amber);}
+  #split-row{font-size:10px;color:#9a9d9a;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;opacity:0.4;pointer-events:none;}
+  #split-row.enabled{opacity:1;pointer-events:auto;}
+  #txfreq-label{font-family:'Courier New',monospace;color:var(--amber);font-weight:700;min-width:70px;}
+  #split-hint{color:#7a7d7f;}
+  #rit-row{font-size:10px;color:#9a9d9a;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;opacity:0.4;pointer-events:none;}
+  #rit-row.enabled{opacity:1;pointer-events:auto;}
+  #ritfreq-label{font-family:'Courier New',monospace;color:var(--amber);font-weight:700;min-width:70px;}
+  #rit-hint{color:#7a7d7f;}
+  #repeater-row{font-size:10px;color:#9a9d9a;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;opacity:0.4;pointer-events:none;}
+  #repeater-row.enabled{opacity:1;pointer-events:auto;}
+  #dup-offset-label{font-family:'Courier New',monospace;color:var(--amber);font-weight:700;min-width:60px;}
+  #repeater-hint{color:#7a7d7f;}
+  #vox-btn{font-size:9px;padding:6px 4px;}
+  #vox-btn.active{background:linear-gradient(180deg,#3f6b3f,#2a4a2a);color:#dff5df;}
+  #qso-log{height:180px;overflow-y:auto;background:#101112;border-radius:5px;padding:8px;font-size:12px;
+    border:1px solid #060707;display:flex;flex-direction:column;gap:5px;}
+  .qso-entry{line-height:1.4;}
+  .qso-entry .cs{color:var(--amber);font-weight:700;}
+  .qso-entry .ts{color:#7a7d7f;font-size:10px;margin-right:5px;}
+  .qso-entry .rst{color:#7fbf7f;font-size:10px;}
+  .qso-entry .txt{color:#dcdad2;}
+  .qso-entry.self .cs{color:#8fd0f0;}
+  .qso-entry.weak .txt{opacity:0.4;font-style:italic;}
+  .play-btn{background:#2a2c2e;border:1px solid #3a3d40;color:#dcdad2;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:11px;margin-left:6px;}
+
+  #tx-controls{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:flex-start;}
+  #ptt-block{display:flex;flex-direction:column;align-items:center;gap:4px;}
+  #ptt-btn{width:110px;height:64px;border-radius:8px;border:2px solid #7a1c14;
+    background:radial-gradient(circle at 30% 25%, #c0453a, #7a1c14 80%);color:#fff;font-weight:800;font-size:13px;
+    letter-spacing:1px;cursor:pointer;user-select:none;box-shadow:0 3px 0 #4a0f0a;}
+  #ptt-btn.txon{background:radial-gradient(circle at 30% 25%, #ff6a5a, #b3281c 80%);box-shadow:0 1px 0 #4a0f0a, 0 0 16px #ff4433;}
+  #ptt-hint{font-size:9px;color:#9a9d9a;text-align:center;max-width:130px;}
+
+  #cw-block{flex:1 1 220px;display:flex;flex-direction:column;gap:6px;}
+  #cw-key{background:#2a2c2e;border:2px solid #454749;border-radius:6px;padding:14px;text-align:center;
+    font-weight:800;letter-spacing:1px;cursor:pointer;user-select:none;color:#dcdad2;}
+  #cw-key.down{background:#454b2e;border-color:var(--amber);}
+  #cw-decoded{background:#101112;border:1px solid #060707;border-radius:4px;padding:6px 8px;min-height:20px;
+    font-family:'Courier New',monospace;font-size:13px;color:#8fe08f;letter-spacing:1px;}
+  #cw-actions{display:flex;gap:6px;}
+
+  #text-row{display:flex;gap:6px;margin-top:10px;}
+  #prosign-row{display:flex;gap:6px;margin-top:8px;}
+  .prosign-btn{flex:0 0 auto;min-width:44px;font-family:'Courier New',monospace;font-weight:800;}
+  #btn-nb{margin-left:auto;flex:0 0 auto;}
+  #btn-nb.active{background:linear-gradient(180deg,#3f6b3f,#2a4a2a);color:#dff5df;}
+  #text-input{flex:1;background:#101112;border:1px solid #2a2c2e;border-radius:4px;padding:8px;color:#dcdad2;font-size:13px;}
+  #text-send{padding:8px 14px;border-radius:4px;border:1px solid #1a1b1c;background:linear-gradient(180deg,#4a4d50,#2c2e30);
+    color:#e8e6df;font-weight:700;cursor:pointer;}
+
+  #callsign-overlay{position:fixed;inset:0;background:rgba(6,7,7,0.88);display:flex;align-items:center;justify-content:center;z-index:50;}
+  #callsign-card{background:var(--body-grey);border-radius:10px;padding:26px 28px;width:340px;max-width:90vw;
+    border:1px solid #1a1b1c;box-shadow:0 20px 50px rgba(0,0,0,0.7);}
+  #callsign-card h2{margin:0 0 6px;font-size:16px;color:#e8e6df;}
+  #callsign-card p{font-size:12px;color:#b9bcb9;line-height:1.6;margin:0 0 14px;}
+  #callsign-card input{width:100%;padding:9px 10px;border-radius:4px;border:1px solid #1a1b1c;background:#101112;
+    color:#e8e6df;font-size:14px;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;}
+  #callsign-card button{width:100%;padding:10px;border-radius:5px;border:none;background:var(--amber);
+    color:#241a00;font-weight:800;letter-spacing:0.5px;cursor:pointer;font-size:13px;}
+  #callsign-card .fine{font-size:10px;color:#8a8d90;margin-top:10px;line-height:1.5;}
+
+  #hint{text-align:center;color:#8a8d90;font-size:11px;margin-top:14px;line-height:1.6;}
+  #hint b{color:#c8c6bd;}
+</style>
+</head>
+<body>
+
+<div id="callsign-overlay">
+  <div id="callsign-card">
+    <h2>Entrar na rede QSO</h2>
+    <p>Escolha um indicativo (não precisa ser um indicativo real) para se identificar na frequência. Todas as mensagens de voz, CW e texto que você enviar ficam <b>visíveis/audíveis para qualquer pessoa</b> sintonizada na mesma frequência dentro deste emulador — não é privado nem criptografado.</p>
+    <input id="callsign-input" maxlength="10" placeholder="Ex: PY2ABC">
+    <input id="server-input" placeholder="wss://seu-servidor.onrender.com">
+    <input id="password-input" type="password" placeholder="Senha do servidor (se houver)">
+    <button id="callsign-submit">Entrar</button>
+    <div class="fine">Cole aqui o endereço do servidor de retransmissão (wss://...). O microfone só é acessado quando você segura o botão PTT. Nada é gravado continuamente.</div>
+  </div>
+</div>
+
+<div id="wrap">
+  <div id="rig">
+    <div class="screw-tl"></div><div class="screw-tr"></div>
+    <div id="brand">
+      <div>
+        <div class="logo">Icom</div>
+        <div class="model">IC-706MKIIG &nbsp;·&nbsp; HF/VHF/UHF ALL MODE TRANSCEIVER — REDE QSO</div>
+      </div>
+      <div class="hf">EMULADOR NÃO OFICIAL<br>apenas para fins educativos</div>
+    </div>
+
+    <div id="top-row">
+      <div id="lcd-frame">
+        <div id="lcd" class="off">
+          <div class="rowtop">
+            <div id="freq-display">14.195<span class="khz-sub">.00</span></div>
+            <div id="mode-badge">USB</div>
+          </div>
+          <div id="smeter"></div>
+          <div id="smeter-label"><span id="meter-mode">S</span>1 &nbsp;3&nbsp; 5&nbsp; 7&nbsp; 9 &nbsp;+20 &nbsp;+40 &nbsp;+60</div>
+          <div class="rowmeta">
+            <div id="meta-left">
+              <span class="tag" id="tag-att">ATT</span>
+              <span class="tag" id="tag-pre">PRE</span>
+              <span class="tag" id="tag-split">SPLIT</span>
+              <span class="tag" id="tag-rit">RIT</span>
+              <span class="tag" id="tag-net">REDE</span>
+            </div>
+            <div id="band-label">40M BAND</div>
+          </div>
+          <div id="band-conditions">Condições de banda: desligado</div>
+        </div>
+      </div>
+      <div id="right-stack">
+        <button id="pwr-btn"><span id="pwr-led"></span>POWER</button>
+        <div class="mini-knob-block"><div class="knob" id="knob-af"></div><div class="lbl">AF GAIN</div></div>
+        <div class="mini-knob-block"><div class="knob" id="knob-sql"></div><div class="lbl">SQUELCH</div></div>
+      </div>
+    </div>
+
+    <div id="wf-frame">
+      <canvas id="spectrum-canvas" width="900" height="90"></canvas>
+      <canvas id="wf-canvas" width="900" height="60"></canvas>
+      <canvas id="ruler-canvas" width="900" height="22"></canvas>
+    </div>
+
+    <div id="mid-row">
+      <div id="vfo-block">
+        <div id="vfo"><div id="vfo-pointer"></div></div>
+        <div id="vfo-label">MAIN TUNING</div>
+        <div id="step-row">
+          <button class="step-btn" data-step="10">10Hz</button>
+          <button class="step-btn active" data-step="1000">1kHz</button>
+          <button class="step-btn" data-step="10000">10kHz</button>
+        </div>
+        <button class="rig-btn" id="btn-calling" style="margin-top:4px;">FREQ. DE ENCONTRO</button>
+        <div id="freq-entry-row">
+          <input id="freq-entry" placeholder="14195.00" inputmode="decimal">
+          <button class="rig-btn" id="freq-entry-go" style="flex:0 0 40px;">IR</button>
+        </div>
+      </div>
+      <div id="btn-grid">
+        <div class="btn-row" id="band-row"></div>
+        <div class="btn-row" id="mode-row"></div>
+        <div class="btn-row">
+          <button class="rig-btn" id="btn-att">ATT</button>
+          <button class="rig-btn" id="btn-pre">PRE AMP</button>
+          <button class="rig-btn" id="btn-split">SPLIT</button>
+          <button class="rig-btn" id="btn-rit">RIT</button>
+          <button class="rig-btn" id="btn-agc">AGC LENTO</button>
+          <button class="rig-btn" id="btn-comp">COMP</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="bottom-row">
+      <div class="knob-block"><div class="knob" id="knob-rf"></div><div class="lbl">RF GAIN</div></div>
+      <div class="knob-block"><div class="knob" id="knob-mic"></div><div class="lbl">MIC GAIN</div></div>
+      <div class="knob-block"><div class="knob" id="knob-pwr"></div><div class="lbl">RF POWER</div></div>
+      <div class="knob-block"><div class="knob" id="knob-wpm"></div><div class="lbl">CW WPM</div></div>
+      <div class="knob-block"><div class="knob" id="knob-compgain"></div><div class="lbl">COMP GAIN</div></div>
+      <div class="knob-block"><div class="knob" id="knob-voxgain"></div><div class="lbl">VOX GAIN</div></div>
+      <div class="knob-block"><div class="knob" id="knob-voxdelay"></div><div class="lbl">VOX DELAY</div></div>
+      <div class="knob-block"><div class="knob" id="knob-nrlevel"></div><div class="lbl">NR LEVEL</div></div>
+      <div class="knob-block"><div class="knob" id="knob-cwpitch"></div><div class="lbl" id="cwpitch-lbl">CW PITCH</div></div>
+    </div>
+
+    <div id="net-panel">
+      <div id="net-warn">⚠ Rede compartilhada: qualquer pessoa sintonizada nesta mesma frequência/modo, dentro deste emulador, recebe suas transmissões. Não é RF real nem privado.</div>
+      <div id="net-head">
+        <div class="chan" id="chan-label">Canal: — </div>
+        <div style="font-size:10px;color:#9a9d9a;">Indicativo: <b id="my-call" style="color:var(--amber);">—</b>
+          &nbsp;·&nbsp;<span id="conn-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#7a1c14;"></span>
+          <span id="conn-label">desconectado</span>
+          &nbsp;·&nbsp;<button class="rig-btn" id="logbook-toggle" style="padding:2px 8px;font-size:9px;">LOGBOOK (<span id="logbook-count">0</span>)</button>
+          &nbsp;·&nbsp;<button class="rig-btn" id="cluster-toggle" style="padding:2px 8px;font-size:9px;">DX CLUSTER</button>
+          &nbsp;·&nbsp;<button class="rig-btn" id="scope-toggle" style="padding:2px 8px;font-size:9px;">BAND SCOPE</button>
+          &nbsp;·&nbsp;<button class="rig-btn" id="mem-toggle" style="padding:2px 8px;font-size:9px;">MEMÓRIA</button>
+          &nbsp;·&nbsp;<button class="rig-btn" id="scan-toggle" style="padding:2px 8px;font-size:9px;">SCAN</button>
+          &nbsp;·&nbsp;<button class="rig-btn" id="help-toggle" style="padding:2px 8px;font-size:9px;">AJUDA</button>
+        </div>
+      </div>
+      <div id="scope-panel" style="display:none;">
+        <div id="scope-hint">Varredura de 14 passos ao redor da sua frequência (como o Band Scope real do 706) — mostra atividade recente de verdade, vinda do DX Cluster, não inventada.</div>
+        <div id="scope-bars"></div>
+        <div id="scope-scale"><span>−</span><span>sua frequência</span><span>+</span></div>
+      </div>
+      <div id="mem-panel" style="display:none;">
+        <div id="mem-hint">Clique num canal pra sintonizar (memoriza frequência, modo e tom). Clique em "GRAVAR" pra salvar o que está no VFO agora nesse canal. Só dura enquanto a página estiver aberta.</div>
+        <div id="mem-grid"></div>
+      </div>
+      <div id="help-panel" style="display:none;">
+        <table id="help-table">
+          <tr><td>PTT</td><td>Segure para falar (ou barra de espaço, fora do modo CW).</td></tr>
+          <tr><td>VOX</td><td>Transmite automaticamente quando você fala, sem segurar nada. Desliga sozinho após ~0,8s de silêncio.</td></tr>
+          <tr><td>TECLA CW</td><td>Clique e segure (ou espaço) só no modo CW. Toque curto = ponto, longo = traço. Decodifica sozinho.</td></tr>
+          <tr><td>CQ CQ</td><td>Envia uma chamada genérica pronta com seu indicativo, em voz de texto ou tom de CW conforme o modo.</td></tr>
+          <tr><td>SPLIT</td><td>Transmite numa frequência e recebe em outra — use os botões −/+ ao lado de "TX" para ajustar.</td></tr>
+          <tr><td>SQUELCH</td><td>Sinais mais fracos que o ajuste ficam mudos (aparecem esmaecidos no log).</td></tr>
+          <tr><td>ATT / PRE</td><td>Atenuador reduz o ganho de recepção; Pré-amplificador aumenta.</td></tr>
+          <tr><td>RIT</td><td>Ajusta só o que você ouve (±9,99 kHz, igual ao 706 real) sem mudar sua frequência de transmissão nem o mostrador. Use −/+ e ZERO.</td></tr>
+          <tr><td>AGC</td><td>RÁPIDO recupera o ganho mais depressa entre picos (bom pra CW/dados); LENTO é mais suave para voz — troca a constante de tempo do controle de ganho, igual ao circuito real.</td></tr>
+          <tr><td>NB</td><td>Noise Blanker — suprime a maior parte das rajadas de estática atmosférica (QRN) simuladas.</td></tr>
+          <tr><td>COMP</td><td>Compressor de fala real — comprime mais sua voz pra aumentar a potência média percebida. Ajuste com o knob COMP GAIN. O medidor vira "ALC" durante a transmissão, como no rádio de verdade.</td></tr>
+          <tr><td>VOX GAIN / DELAY</td><td>Sensibilidade do VOX e quanto tempo de silêncio espera antes de soltar a transmissão automaticamente.</td></tr>
+          <tr><td>ANF</td><td>Filtro de Notch Automático — reduz um apito/batimento fixo na recepção (versão simplificada do real, que varre e cancela automaticamente).</td></tr>
+          <tr><td>NR</td><td>Redução de Ruído — suaviza o chiado de fundo. Ajuste a intensidade com o knob NR LEVEL.</td></tr>
+          <tr><td>DUP</td><td>Só em FM: aplica o offset padrão de repetidora da banda (2m: ±600kHz; 70cm: +5MHz) automaticamente na transmissão.</td></tr>
+          <tr><td>TOM / TSQL</td><td>Tom CTCSS (padrão de fábrica 88,5 Hz) — clique em TOM pra trocar. Com TSQL ligado, só abre o squelch se o tom de quem transmite bater com o seu, igual chamada seletiva real.</td></tr>
+          <tr><td>K / QRZ? / BREAK / 73</td><td>Prosigns rápidos — enviam com seu indicativo, em CW (tom real) se o modo for CW, ou texto/voz nos demais.</td></tr>
+          <tr><td>FREQ. DE ENCONTRO</td><td>Atalho para 14.300 USB — combine com quem quiser conversar.</td></tr>
+          <tr><td>Entrada de frequência</td><td>Digite em kHz (ex: 14195.00) e aperte "IR" ou Enter.</td></tr>
+          <tr><td>DX CLUSTER</td><td>Mostra atividade recente em qualquer frequência do servidor. Clique num spot para sintonizar direto.</td></tr>
+          <tr><td>BAND SCOPE</td><td>Varredura de 14 passos ao redor da sua frequência, igual ao Band Scope real do 706 — mas aqui as barras refletem atividade de verdade do DX Cluster, não ruído inventado.</td></tr>
+          <tr><td>MEMÓRIA</td><td>10 canais que guardam frequência, modo, tom e DUP. "GRAVAR" salva o que está no VFO agora; clicar no canal sintoniza. Só dura enquanto a página estiver aberta.</td></tr>
+          <tr><td>SCAN</td><td>Percorre os canais de memória gravados. Onde houver atividade real recente (spot do DX Cluster), ele demora mais — como um scan de verdade que pausa ao detectar sinal. Transmitir cancela o scan.</td></tr>
+          <tr><td>BRK (break-in)</td><td>Só em CW. DESL: precisa clicar ENVIAR CW manualmente. SEMI: envia a palavra sozinho depois de uma pausa. TOTAL (QSK): manda cada letra pra rede assim que você termina de tecla-la, sem esperar a palavra toda.</td></tr>
+          <tr><td>Bandas (clique de novo)</td><td>Cada banda guarda as 3 últimas frequências usadas nela (registro real do 706). Clique de novo na banda em que você já está pra girar entre elas.</td></tr>
+          <tr><td>CW PITCH</td><td>Tom do bipe de CW, de 300 a 900Hz (faixa real) — vale tanto pra o que você teclando ouve quanto pro CW recebido de outros.</td></tr>
+          <tr><td>LOGBOOK</td><td>Registra automaticamente cada indicativo novo ouvido. Exporte em ADIF (para softwares de log) ou CSV.</td></tr>
+          <tr><td>Condições de banda</td><td>Índice Kp geomagnético real, direto do NOAA SWPC — influencia o ruído de fundo simulado.</td></tr>
+        </table>
+        <div id="help-tech-note">
+          Engenharia de referência (do manual de serviço real do IC-706MKIIG): receptor duplo/triplo
+          conversor superheteródino — 1ª FI ≈ 69 MHz (70,7 MHz em WFM), 2ª FI ≈ 9 MHz, 3ª FI 455 kHz
+          (SSB/AM-N/FM). RIT real: ±9,99 kHz. Este emulador não reproduz o hardware — usa essas
+          referências para calibrar o comportamento dos controles (RIT, AGC, filtros por modo) de forma
+          realista.
+        </div>
+      </div>
+      <div id="logbook-panel" style="display:none;">
+        <div id="logbook-table"></div>
+        <div id="logbook-actions">
+          <button class="rig-btn" id="logbook-adif">EXPORTAR ADIF</button>
+          <button class="rig-btn" id="logbook-csv">EXPORTAR CSV</button>
+          <button class="rig-btn" id="logbook-clear">LIMPAR LOG</button>
+        </div>
+      </div>
+      <div id="cluster-panel" style="display:none;">
+        <div id="cluster-hint">Atividade recente em qualquer frequência deste servidor — clique num spot para sintonizar direto.</div>
+        <div id="cluster-list"></div>
+      </div>
+      <div id="roster-row">
+        <span id="roster-title">Na frequência:</span>
+        <span id="roster-list">—</span>
+      </div>
+      <div id="split-row">
+        <span class="tag active" style="opacity:1;">TX</span>
+        <span id="txfreq-label">—</span>
+        <button class="rig-btn" id="tx-down" style="flex:0 0 34px;">−</button>
+        <button class="rig-btn" id="tx-up" style="flex:0 0 34px;">+</button>
+        <span id="split-hint">(ative SPLIT para TX numa frequência diferente da recepção — como num pile-up de DX)</span>
+      </div>
+      <div id="rit-row">
+        <span class="tag active" style="opacity:1;">RIT</span>
+        <span id="ritfreq-label">(desligado)</span>
+        <button class="rig-btn" id="rit-down" style="flex:0 0 34px;">−</button>
+        <button class="rig-btn" id="rit-up" style="flex:0 0 34px;">+</button>
+        <button class="rig-btn" id="rit-clear" style="flex:0 0 44px;">ZERO</button>
+        <span id="rit-hint">(ajusta só a recepção, ±9,99 kHz — não muda o que você transmite)</span>
+      </div>
+      <div id="repeater-row">
+        <span class="tag active" style="opacity:1;">REPETIDORA</span>
+        <button class="rig-btn" id="btn-dup" style="flex:0 0 60px;">DUP</button>
+        <span id="dup-offset-label">—</span>
+        <button class="rig-btn" id="btn-tone" style="flex:0 0 80px;">TOM 88.5</button>
+        <button class="rig-btn" id="btn-tsql" style="flex:0 0 60px;">TSQL</button>
+        <span id="repeater-hint">(só em modo FM — DUP aplica o offset padrão da banda; TSQL só abre com o tom certo)</span>
+      </div>
+      <div id="qso-log"></div>
+
+      <div id="tx-controls">
+        <div id="ptt-block">
+          <button id="ptt-btn">SEGURE<br>PTT</button>
+          <div id="ptt-hint">Voz real (microfone), filtrada como SSB/AM/FM. Ou segure a barra de espaço.</div>
+          <button class="rig-btn" id="vox-btn" style="margin-top:4px;">VOX: DESLIGADO</button>
+        </div>
+        <div id="cw-block">
+          <div id="cw-key">TECLA CW (clique e segure / barra de espaço no modo CW)</div>
+          <div id="cw-decoded"></div>
+          <div id="cw-actions">
+            <button class="rig-btn" id="cw-send">ENVIAR CW</button>
+            <button class="rig-btn" id="cw-clear">LIMPAR</button>
+            <button class="rig-btn" id="cw-cq">CQ CQ</button>
+            <button class="rig-btn" id="btn-brk">BRK: DESL</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="prosign-row">
+        <button class="rig-btn prosign-btn" data-prosign="K">K</button>
+        <button class="rig-btn prosign-btn" data-prosign="QRZ">QRZ?</button>
+        <button class="rig-btn prosign-btn" data-prosign="BREAK BREAK">BREAK</button>
+        <button class="rig-btn prosign-btn" data-prosign="73">73</button>
+        <button class="rig-btn" id="btn-nb">NB</button>
+        <button class="rig-btn" id="btn-anf">ANF</button>
+        <button class="rig-btn" id="btn-nr">NR</button>
+      </div>
+
+      <div id="text-row">
+        <input id="text-input" placeholder="Mensagem de texto (modo digital / chat auxiliar)">
+        <button id="text-send">ENVIAR</button>
+      </div>
+    </div>
+
+    <div id="hint">Ligue o rádio, escolha banda/modo e sintonize a mesma frequência de outra pessoa com este emulador aberto para conversar. Use <b>FREQ. DE ENCONTRO</b> para ir direto a um canal comum (14.300 USB).</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------------- static data ----------------
+  const bands = [
+    {name:'1.8', hz:1900000},{name:'3.5', hz:3750000},{name:'7', hz:7150000},
+    {name:'10', hz:10120000},{name:'14', hz:14195000},{name:'18', hz:18110000},
+    {name:'21', hz:21250000},{name:'24', hz:24940000},{name:'28', hz:28400000},
+    {name:'50', hz:50150000},{name:'144', hz:144200000},{name:'430', hz:430000000},
+  ];
+  const modes = ['LSB','USB','CW','AM','FM','RTTY'];
+  const CALLING_FREQ = 14300000, CALLING_MODE = 'USB';
+
+  // Tons CTCSS reais (padrão EIA), com 88.5 Hz como no 706 de fábrica.
+  const CTCSS_TONES = [67.0, 71.9, 77.0, 82.5, 88.5, 94.8, 100.0, 107.2, 114.8, 123.0, 131.8, 141.3, 151.4, 162.2, 173.8, 186.2, 203.5, 218.1, 233.6, 250.3];
+  // Offset padrão de repetidora por banda (convenção amadora comum — pode variar por região/país).
+  function standardDuplexOffsetHz(freqHz){
+    if(freqHz >= 144000000 && freqHz <= 148000000){
+      return freqHz < 147000000 ? -600000 : 600000; // 2m: -600kHz abaixo de 147.0, +600kHz acima
+    }
+    if(freqHz >= 430000000 && freqHz <= 450000000){
+      return 5000000; // 70cm: +5MHz é o mais comum
+    }
+    return 0;
+  }
+
+  const MORSE = {
+    'A':'.-','B':'-...','C':'-.-.','D':'-..','E':'.','F':'..-.','G':'--.','H':'....',
+    'I':'..','J':'.---','K':'-.-','L':'.-..','M':'--','N':'-.','O':'---','P':'.--.',
+    'Q':'--.-','R':'.-.','S':'...','T':'-','U':'..-','V':'...-','W':'.--','X':'-..-',
+    'Y':'-.--','Z':'--..','0':'-----','1':'.----','2':'..---','3':'...--','4':'....-',
+    '5':'.....','6':'-....','7':'--...','8':'---..','9':'----.'
+  };
+  const MORSE_REV = {}; Object.keys(MORSE).forEach(k=>MORSE_REV[MORSE[k]]=k);
+
+  // ---------------- state ----------------
+  let state = {
+    power:false, freq:14195000, txFreq:14195000, step:1000, mode:'USB',
+    att:false, pre:false, split:false, rit:false, ritOffset:0, vox:false, nb:false, agc:'slow',
+    comp:false, compGain:0.5, voxGain:0.5, voxDelay:0.5, anf:false, nr:false, nrLevel:0.5,
+    dup:false, tone:88.5, tsql:false, cwBreakIn:'off', cwPitch:0.583,
+    af:0.7, sql:0.15, rf:1, mic:0.6, pwr:0.7, wpm:0.4,
+    callsign:null, serverUrl:null, password:''
+  };
+  let audioCtx=null;
+  let noiseSrc=null, noiseGain=null, qrnTimer=null;
+  let currentChannelKey=null, seenIds=new Set();
+  let micStream=null, mediaRecorder=null, recChunks=[], recAnalyser=null, recLevels=[];
+  let ptt=false;
+  let txActive=false; // true durante qualquer transmissão (PTT manual ou VOX) — usado pelo medidor S/ALC
+  let pttCountdownTimer=null, pttSafetyTimer=null, ptt_restoreHint=null;
+  let cwDown=false, cwPressStart=0, cwLastUp=0, cwBuffer='', cwWordBuffer='', cwOsc=null, cwGain=null, cwFinalizeTimer=null, cwWordGapTimer=null;
+  let ws=null, wsConnected=false, wsReconnectTimer=null, wsShouldReconnect=false;
+
+  // ---------------- helpers ----------------
+  function wpmValue(){ return Math.round(8 + state.wpm*32); } // 8..40 wpm
+  function ditMs(){ return 1200/wpmValue(); }
+  function cwPitchHz(){ return Math.round(300 + state.cwPitch*600); } // faixa real: 300-900Hz
+
+  function fmtFreq(hz){
+    const mhz = Math.floor(hz/1000000);
+    const rest = hz % 1000000;
+    const khz = Math.floor(rest/1000);
+    const hzPart = rest % 1000;
+    return {main:`${mhz}.${String(khz).padStart(3,'0')}`, sub:`.${String(Math.floor(hzPart/10)).padStart(2,'0')}`};
+  }
+  function nearestBandIdx(hz){
+    let best=0, bd=Infinity;
+    bands.forEach((b,i)=>{ const d=Math.abs(Math.log10(hz)-Math.log10(b.hz)); if(d<bd){bd=d;best=i;} });
+    return best;
+  }
+  function channelKeyFor(freq, mode){
+    const bucketHz = Math.round(freq/1000)*1000; // 1kHz channel bucket
+    return `qsonet:ch:${bucketHz}:${mode}`;
+  }
+  // RIT (Receiver Incremental Tuning): no 706 real, desloca só a recepção,
+  // sem alterar a frequência mostrada nem a de transmissão. Faixa real: ±9,99 kHz.
+  function effectiveRxFreq(){
+    return state.freq + (state.rit ? state.ritOffset : 0);
+  }
+  function ensureAudioCtx(){
+    if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+    if(audioCtx.state==='suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  // Safari/iOS não suporta 'audio/webm' — detecta o melhor formato disponível
+  // (importante para que a voz funcione também em iPhone/iPad).
+  let cachedMimeType = undefined;
+  function pickRecorderMimeType(){
+    if(cachedMimeType!==undefined) return cachedMimeType;
+    const candidates = [
+      'audio/webm;codecs=opus', 'audio/webm',
+      'audio/mp4;codecs=mp4a.40.2', 'audio/mp4',
+      'audio/ogg;codecs=opus', 'audio/aac'
+    ];
+    cachedMimeType = candidates.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+    return cachedMimeType;
+  }
+  function createRecorder(stream){
+    const mt = pickRecorderMimeType();
+    return mt ? new MediaRecorder(stream, {mimeType:mt}) : new MediaRecorder(stream);
+  }
+  // Streaming ao vivo (baixa latência): captura o áudio já processado (mesma cadeia
+  // de filtros SSB/AM/FM) direto em amostras PCM cruas via AudioWorklet, manda pela
+  // rede em pedacinhos de ~20ms sem nenhuma compressão/codificação — e quem recebe
+  // só remonta essas amostras num AudioBuffer, sem precisar decodificar nada. Isso
+  // evita por completo os problemas de formato de arquivo entre navegadores (o
+  // motivo de o Safari não funcionar nos métodos anteriores) porque não existe
+  // "arquivo" nenhum no meio do caminho — só números. Funciona em qualquer
+  // navegador com suporte a AudioWorklet (todos os atuais, Safari/iPhone incluído).
+  const PCM_CHUNK_MS = 40;
+  const PCM_TARGET_RATE = 16000; // voz de rádio cabe folgada em 16 kHz: ~3x menos banda que 48 kHz
+  const PCM_WORKLET_CODE = `
+    class PcmCaptureProcessor extends AudioWorkletProcessor {
+      constructor(options){
+        super();
+        const o = options.processorOptions || {};
+        this._target = o.chunkSamples || 640;
+        this._ratio = sampleRate / (o.targetRate || 16000);
+        this._prev = 0; this._t = 1;
+        this._out = new Float32Array(this._target);
+        this._n = 0;
+      }
+      process(inputs, outputs){
+        const input = inputs[0];
+        const output = outputs[0];
+        if(input && input[0]){
+          const ch = input[0];
+          for(let i=0;i<ch.length;i++){
+            const cur = ch[i];
+            while(this._t <= 1){
+              this._out[this._n++] = this._prev + (cur - this._prev) * this._t;
+              this._t += this._ratio;
+              if(this._n >= this._target){
+                const int16 = new Int16Array(this._target);
+                for(let k=0;k<this._target;k++){
+                  const v = Math.max(-1, Math.min(1, this._out[k]));
+                  int16[k] = v < 0 ? v*0x8000 : v*0x7FFF;
+                }
+                this.port.postMessage(int16.buffer, [int16.buffer]);
+                this._n = 0;
+              }
+            }
+            this._t -= 1; this._prev = cur;
+          }
+        }
+        if(output && output[0]) output[0].fill(0);
+        return true;
+      }
+    }
+    registerProcessor('pcm-capture-processor', PcmCaptureProcessor);
+  `;
+  let pcmWorkletURL = null, pcmWorkletReady = false;
+  function getPcmWorkletURL(){
+    if(!pcmWorkletURL){
+      const blob = new Blob([PCM_WORKLET_CODE], {type:'application/javascript'});
+      pcmWorkletURL = URL.createObjectURL(blob);
+    }
+    return pcmWorkletURL;
+  }
+  async function ensurePcmWorklet(ctx){
+    if(pcmWorkletReady) return;
+    if(!ctx.audioWorklet) throw new Error('AudioWorklet indisponível neste navegador');
+    await ctx.audioWorklet.addModule(getPcmWorkletURL());
+    pcmWorkletReady = true;
+  }
+  function canStreamVoice(){
+    return !!(window.AudioContext || window.webkitAudioContext);
+  }
+  function makeDistortionCurve(amount){
+    const n=512, curve=new Float32Array(n);
+    for(let i=0;i<n;i++){ const x=i*2/n-1; curve[i]=(1+amount)*x/(1+amount*Math.abs(x)); }
+    return curve;
+  }
+
+  function modeFilterSpec(mode){
+    switch(mode){
+      case 'USB': case 'LSB': return {hp:300, lp:2700};
+      case 'AM': return {hp:100, lp:5000};
+      case 'FM': return {hp:300, lp:3400};
+      case 'CW': return {hp:400, lp:1000};
+      case 'RTTY': return {hp:300, lp:3000};
+      default: return {hp:300, lp:3000};
+    }
+  }
+
+  function buildFilterChain(ctx, inputNode, mode, releaseSec, compOverride){
+    const spec = modeFilterSpec(mode);
+    const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=spec.hp;
+    const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=spec.lp;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = compOverride ? compOverride.threshold : -26;
+    comp.knee.value=12;
+    comp.ratio.value = compOverride ? compOverride.ratio : 6;
+    comp.attack.value=0.003;
+    comp.release.value = releaseSec!==undefined ? releaseSec : 0.18;
+    const shaper = ctx.createWaveShaper(); shaper.curve = makeDistortionCurve(4);
+    inputNode.connect(hp); hp.connect(lp); lp.connect(comp); comp.connect(shaper);
+    return shaper;
+  }
+  // Constante de tempo do AGC de recepção — no 706 real isso é um circuito dedicado
+  // (detector + amplificador DC) que muda a velocidade com que o ganho de FI se recupera.
+  // Aqui simulamos o mesmo efeito ajustando o "release" do compressor da cadeia de recepção.
+  function agcReleaseSec(){ return state.agc==='fast' ? 0.06 : 0.4; }
+  // Speech compressor de TX (real, ajustável por COMP GAIN): aumenta a potência média
+  // de voz comprimindo mais forte. Desligado, usa os valores "neutros" de sempre.
+  function txCompParams(){
+    if(!state.comp) return { threshold:-26, ratio:6 };
+    return { threshold: -34 - state.compGain*14, ratio: 8 + state.compGain*14 };
+  }
+
+  // background band noise
+  function startBandNoise(){
+    const ctx = ensureAudioCtx();
+    const bufSize = ctx.sampleRate*2;
+    const buf = ctx.createBuffer(1,bufSize,ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1)*0.6;
+    noiseSrc = ctx.createBufferSource(); noiseSrc.buffer=buf; noiseSrc.loop=true;
+    const spec = modeFilterSpec(state.mode);
+    const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=(spec.hp+spec.lp)/2; bp.Q.value=0.6;
+    noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0;
+    noiseGain.gain.linearRampToValueAtTime(0.02, ctx.currentTime + 0.12); // sobe suave, sem estalo
+    noiseSrc.connect(bp); bp.connect(noiseGain); noiseGain.connect(ctx.destination);
+    noiseSrc.start();
+    scheduleQRN();
+  }
+  function stopBandNoise(){
+    try{
+      if(noiseSrc && noiseGain){
+        const ctx = ensureAudioCtx();
+        const g = noiseGain, s = noiseSrc;
+        g.gain.cancelScheduledValues(ctx.currentTime);
+        g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); // desce suave
+        s.stop(ctx.currentTime + 0.15);
+        setTimeout(()=>{ try{ s.disconnect(); g.disconnect(); }catch(e){} }, 300);
+      }
+    }catch(e){}
+    noiseSrc=null; noiseGain=null;
+    if(qrnTimer){ clearTimeout(qrnTimer); qrnTimer=null; }
+  }
+  // QRN: estática atmosférica (tipo raios) — rajadas de ruído impulsivo aleatórias.
+  // O Noise Blanker (NB) suprime a maior parte delas, como num rádio de verdade.
+  function scheduleQRN(){
+    if(!state.power) return;
+    const condMul = 1 + (1 - bandConditions.score) * 0.6; // condições ruins = um pouco mais de QRN
+    const delay = (14000 + Math.random()*26000) / condMul; // bem mais espaçado: ~14s a 40s
+    qrnTimer = setTimeout(()=>{
+      if(state.power){
+        const suppressed = state.nb && Math.random() < 0.85;
+        if(!suppressed) triggerQRNCrash();
+        scheduleQRN();
+      }
+    }, delay);
+  }
+  function triggerQRNCrash(){
+    try{
+      const ctx = ensureAudioCtx();
+      const dur = 0.05 + Math.random()*0.15;
+      const buf = ctx.createBuffer(1, Math.max(1,Math.ceil(ctx.sampleRate*dur)), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      const attackN = Math.max(1, Math.floor(data.length*0.08)); // rampa curta de entrada
+      for(let i=0;i<data.length;i++){
+        const decay = 1 - i/data.length;
+        const attack = i < attackN ? i/attackN : 1; // evita o "clique" seco do início
+        data[i] = (Math.random()*2-1) * decay * decay * attack;
+      }
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 400;
+      const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 2600; // tira o agudo estridente
+      const gain = ctx.createGain();
+      gain.gain.value = (0.04 + Math.random()*0.07) * state.af * (state.nb?0.25:1);
+      src.connect(hp); hp.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+      src.start();
+      setMeterTarget(Math.min(1, meterTarget+0.1));
+    }catch(e){ /* ignora, não é crítico */ }
+  }
+  function updateNoiseLevel(){
+    if(!noiseGain) return;
+    const sqlOpen = state.sql < 0.9;
+    const condMul = 1 + (1 - bandConditions.score) * 0.9; // pior condição geomagnética = mais ruído de fundo
+    const target = sqlOpen ? (0.015 + (1-state.sql)*0.015) * state.af * (state.pre?1.4:1) * condMul : 0.0;
+    try{
+      const ctx = ensureAudioCtx();
+      // rampa curta em vez de troca seca — evita estalo ao mexer nos controles
+      noiseGain.gain.cancelScheduledValues(ctx.currentTime);
+      noiseGain.gain.setValueAtTime(noiseGain.gain.value, ctx.currentTime);
+      noiseGain.gain.linearRampToValueAtTime(target, ctx.currentTime + 0.08);
+    }catch(e){ noiseGain.gain.value = target; }
+  }
+
+  // ---------------- Condições de banda (dado real: índice Kp do NOAA SWPC) ----------------
+  // Isso não limita quem você consegue ouvir (a comunicação é via servidor, não RF real) —
+  // é só um retrato realista do "clima espacial" atual aplicado ao ruído de fundo e ao waterfall.
+  let bandConditions = { kp:null, label:'consultando NOAA...', score:0.75, fetchedAt:0, ok:false };
+  async function fetchBandConditions(){
+    try{
+      const res = await fetch('https://services.swpc.noaa.gov/json/planetary_k_index_1m.json');
+      const arr = await res.json();
+      const last = arr[arr.length-1];
+      const kp = last ? Number(last.estimated_kp ?? last.kp_index) : null;
+      if(!isFinite(kp)){ throw new Error('kp inválido'); }
+      const score = Math.max(0.15, Math.min(1, 1 - kp/9));
+      let label;
+      if(kp < 3) label = 'calmo — condições boas';
+      else if(kp < 5) label = 'instável — condições regulares';
+      else label = 'tempestade geomagnética — condições degradadas';
+      bandConditions = { kp, label, score, fetchedAt:Date.now(), ok:true };
+    }catch(e){
+      bandConditions = { kp:null, label:'indisponível (sem acesso ao NOAA SWPC)', score:0.75, fetchedAt:Date.now(), ok:false };
+    }
+    renderBandConditions();
+  }
+  function renderBandConditions(){
+    const el = document.getElementById('band-conditions');
+    if(!el) return;
+    el.textContent = bandConditions.kp!==null
+      ? `Kp ${bandConditions.kp.toFixed(1)} · ${bandConditions.label} (NOAA SWPC)`
+      : `Condições de banda: ${bandConditions.label}`;
+  }
+  let bandConditionsTimer = null;
+
+  // ---------------- render ----------------
+  const lcd = document.getElementById('lcd');
+  const freqDisp = document.getElementById('freq-display');
+  const modeBadge = document.getElementById('mode-badge');
+  const bandLabel = document.getElementById('band-label');
+  const pwrBtn = document.getElementById('pwr-btn');
+  const pwrLed = document.getElementById('pwr-led');
+  const chanLabel = document.getElementById('chan-label');
+
+  function render(){
+    lcd.classList.toggle('off', !state.power);
+    pwrBtn.classList.toggle('on', state.power);
+    pwrLed.classList.toggle('on', state.power);
+    const f = fmtFreq(state.freq);
+    freqDisp.innerHTML = f.main + `<span class="khz-sub">${f.sub}</span>`;
+    modeBadge.textContent = state.mode;
+    const bi = nearestBandIdx(state.freq);
+    bandLabel.textContent = bands[bi].name + 'M BAND';
+    bandStack[bands[bi].name][0] = state.freq;
+    drawRuler();
+
+    document.getElementById('tag-att').classList.toggle('active', state.att);
+    document.getElementById('tag-pre').classList.toggle('active', state.pre);
+    document.getElementById('tag-split').classList.toggle('active', state.split);
+    document.getElementById('tag-rit').classList.toggle('active', state.rit);
+    document.getElementById('tag-net').classList.toggle('active', state.power);
+
+    document.getElementById('btn-att').classList.toggle('active', state.att);
+    document.getElementById('btn-pre').classList.toggle('active', state.pre);
+    document.getElementById('btn-split').classList.toggle('active', state.split);
+    document.getElementById('btn-rit').classList.toggle('active', state.rit);
+    document.getElementById('btn-nb').classList.toggle('active', state.nb);
+
+    document.getElementById('split-row').classList.toggle('enabled', state.split);
+    const tf = fmtFreq(state.txFreq);
+    document.getElementById('txfreq-label').textContent = state.split ? (tf.main+tf.sub) : '(= RX)';
+
+    document.querySelectorAll('.band-btn').forEach((el,i)=> el.classList.toggle('active', i===bi));
+    document.querySelectorAll('.mode-btn').forEach(el=> el.classList.toggle('active', el.dataset.mode===state.mode));
+    document.querySelectorAll('.step-btn').forEach(el=> el.classList.toggle('active', Number(el.dataset.step)===state.step));
+
+    setKnobRotation('knob-af', state.af); setKnobRotation('knob-sql', state.sql);
+    setKnobRotation('knob-rf', state.rf); setKnobRotation('knob-mic', state.mic);
+    setKnobRotation('knob-pwr', state.pwr); setKnobRotation('knob-wpm', state.wpm);
+    setKnobRotation('knob-compgain', state.compGain); setKnobRotation('knob-voxgain', state.voxGain); setKnobRotation('knob-voxdelay', state.voxDelay);
+    setKnobRotation('knob-nrlevel', state.nrLevel);
+    setKnobRotation('knob-cwpitch', state.cwPitch);
+    document.getElementById('cwpitch-lbl').textContent = 'CW PITCH ' + cwPitchHz() + 'Hz';
+
+    const cwVisible = state.mode==='CW';
+    document.getElementById('cw-block').style.opacity = cwVisible?1:0.35;
+    document.getElementById('cw-block').style.pointerEvents = cwVisible?'auto':'none';
+
+    const key = channelKeyFor(effectiveRxFreq(), state.mode);
+    chanLabel.textContent = `Canal (RX): ${(Math.round(effectiveRxFreq()/1000))} kHz · ${state.mode}` + (state.rit ? ` (RIT ${state.ritOffset>=0?'+':''}${(state.ritOffset/1000).toFixed(2)}kHz)` : '');
+    if(state.power && key!==currentChannelKey){
+      switchChannel(key);
+    }
+    document.getElementById('rit-row').classList.toggle('enabled', state.rit);
+    document.getElementById('ritfreq-label').textContent = state.rit ? `${state.ritOffset>=0?'+':''}${state.ritOffset} Hz` : '(desligado)';
+    document.getElementById('btn-agc').textContent = 'AGC ' + (state.agc==='fast' ? 'RÁPIDO' : 'LENTO');
+    document.getElementById('btn-comp').classList.toggle('active', state.comp);
+    document.getElementById('btn-anf').classList.toggle('active', state.anf);
+    document.getElementById('btn-nr').classList.toggle('active', state.nr);
+    document.getElementById('repeater-row').classList.toggle('enabled', state.mode==='FM');
+    document.getElementById('btn-dup').classList.toggle('active', state.dup);
+    document.getElementById('btn-tsql').classList.toggle('active', state.tsql);
+    document.getElementById('btn-tone').textContent = 'TOM ' + state.tone.toFixed(1);
+    const dupOff = standardDuplexOffsetHz(state.freq);
+    document.getElementById('dup-offset-label').textContent = dupOff===0 ? '(sem offset padrão aqui)' : `${dupOff>0?'+':''}${(dupOff/1000000).toFixed(3)}MHz`;
+    updateNoiseLevel();
+  }
+  function setKnobRotation(id, val01){
+    document.getElementById(id).style.setProperty('--rot', (-135+val01*270)+'deg');
+  }
+
+  // build band/mode buttons
+  const bandRow = document.getElementById('band-row');
+  // Registros de banda (band stacking, reais no 706): cada banda guarda as 3
+  // últimas frequências usadas nela. Apertar o botão da banda em que você já
+  // está alterna entre os 3 registros; apertar o de outra banda chama o
+  // registro mais recente dela.
+  const bandStack = {};
+  bands.forEach(b => { bandStack[b.name] = [b.hz, b.hz, b.hz]; });
+  bands.forEach((b)=>{
+    const btn = document.createElement('button');
+    btn.className='rig-btn band-btn'; btn.textContent=b.name; btn.title=b.name+' MHz';
+    btn.addEventListener('click',()=>{
+      if(!state.power) return;
+      const currentBandIdx = nearestBandIdx(state.freq);
+      const clickedBandIdx = bands.indexOf(b);
+      if(currentBandIdx === clickedBandIdx){
+        bandStack[b.name].push(bandStack[b.name].shift()); // já está na banda: gira os registros
+      }
+      state.freq = bandStack[b.name][0];
+      render();
+    });
+    bandRow.appendChild(btn);
+  });
+  const modeRow = document.getElementById('mode-row');
+  modes.forEach(m=>{
+    const btn = document.createElement('button');
+    btn.className='rig-btn mode-btn'; btn.dataset.mode=m; btn.textContent=m;
+    btn.addEventListener('click',()=>{ if(!state.power) return; state.mode=m; if(m==='CW') disableVox(); render(); });
+    modeRow.appendChild(btn);
+  });
+  document.querySelectorAll('.step-btn').forEach(el=>{
+    el.addEventListener('click',()=>{ if(!state.power) return; state.step=Number(el.dataset.step); render(); });
+  });
+  document.getElementById('btn-att').addEventListener('click',()=>{ if(state.power){state.att=!state.att; render();} });
+  document.getElementById('btn-pre').addEventListener('click',()=>{ if(state.power){state.pre=!state.pre; render();} });
+  document.getElementById('btn-nb').addEventListener('click',()=>{ if(state.power){state.nb=!state.nb; render();} });
+  document.getElementById('btn-anf').addEventListener('click',()=>{ if(state.power){state.anf=!state.anf; render();} });
+  document.getElementById('btn-nr').addEventListener('click',()=>{ if(state.power){state.nr=!state.nr; render();} });
+  document.getElementById('btn-split').addEventListener('click',()=>{
+    if(!state.power) return;
+    state.split=!state.split;
+    if(state.split){ state.txFreq = state.freq; state.dup = false; }
+    render();
+  });
+  document.getElementById('btn-dup').addEventListener('click',()=>{
+    if(!state.power || state.mode!=='FM') return;
+    state.dup = !state.dup;
+    if(state.dup) state.split = false;
+    render();
+  });
+  document.getElementById('btn-tone').addEventListener('click',()=>{
+    if(!state.power) return;
+    const idx = CTCSS_TONES.indexOf(state.tone);
+    state.tone = CTCSS_TONES[(idx+1) % CTCSS_TONES.length];
+    render();
+  });
+  document.getElementById('btn-tsql').addEventListener('click',()=>{
+    if(!state.power || state.mode!=='FM') return;
+    state.tsql = !state.tsql;
+    render();
+  });
+  document.getElementById('tx-up').addEventListener('click',()=>{
+    if(!state.power || !state.split) return;
+    state.txFreq += state.step; render();
+  });
+  document.getElementById('tx-down').addEventListener('click',()=>{
+    if(!state.power || !state.split) return;
+    state.txFreq -= state.step; render();
+  });
+  document.getElementById('btn-rit').addEventListener('click',()=>{ if(state.power){state.rit=!state.rit; render();} });
+  document.getElementById('rit-up').addEventListener('click',()=>{
+    if(!state.power || !state.rit) return;
+    state.ritOffset = Math.max(-9990, Math.min(9990, state.ritOffset + Math.min(state.step, 100)));
+    render();
+  });
+  document.getElementById('rit-down').addEventListener('click',()=>{
+    if(!state.power || !state.rit) return;
+    state.ritOffset = Math.max(-9990, Math.min(9990, state.ritOffset - Math.min(state.step, 100)));
+    render();
+  });
+  document.getElementById('rit-clear').addEventListener('click',()=>{
+    if(!state.power || !state.rit) return;
+    state.ritOffset = 0; render();
+  });
+  document.getElementById('btn-agc').addEventListener('click',()=>{
+    if(!state.power) return;
+    state.agc = state.agc==='fast' ? 'slow' : 'fast';
+    render();
+  });
+  document.getElementById('btn-comp').addEventListener('click',()=>{
+    if(!state.power) return;
+    state.comp = !state.comp;
+    render();
+  });
+  document.getElementById('btn-calling').addEventListener('click',()=>{
+    if(!state.power) return;
+    state.freq=CALLING_FREQ; state.mode=CALLING_MODE; render();
+  });
+
+  let micWarnShown=false;
+  pwrBtn.addEventListener('click',()=>{
+    state.power=!state.power;
+    if(state.power){
+      ensureAudioCtx(); startBandNoise();
+      fetchBandConditions();
+      if(bandConditionsTimer) clearInterval(bandConditionsTimer);
+      bandConditionsTimer = setInterval(fetchBandConditions, 20*60*1000);
+      if(!micWarnShown && (window.self!==window.top)){
+        micWarnShown=true;
+        addSystemLine('Aviso: dentro deste preview, o microfone fica bloqueado pela sandbox do Claude. Baixe o arquivo .html e abra-o direto no navegador para usar voz (PTT) — a rede (servidor) funciona igual nos dois casos. CW e texto funcionam normalmente por aqui.');
+      }
+    }
+    else {
+      stopBandNoise();
+      disableVox();
+      stopScan();
+      if(bandConditionsTimer){ clearInterval(bandConditionsTimer); bandConditionsTimer=null; }
+      if(ws && ws.readyState===WebSocket.OPEN){ ws.send(JSON.stringify({type:'listen', channels:[], callsign:state.callsign})); }
+      currentChannelKey = null;
+    }
+    render();
+  });
+
+  // VFO
+  const vfo = document.getElementById('vfo');
+  let vfoRot=0, dragging=false, lastY=0;
+  function tune(deltaSteps){
+    if(!state.power) return;
+    state.freq = Math.max(30000, Math.min(470000000, state.freq + deltaSteps*state.step));
+    vfoRot += deltaSteps*6; vfo.style.transform=`rotate(${vfoRot}deg)`;
+    render();
+  }
+  vfo.addEventListener('mousedown',e=>{dragging=true; lastY=e.clientY;});
+  window.addEventListener('mouseup',()=>dragging=false);
+  window.addEventListener('mousemove',e=>{ if(!dragging) return; const dy=lastY-e.clientY; if(Math.abs(dy)>=4){tune(dy>0?1:-1); lastY=e.clientY;} });
+  vfo.addEventListener('wheel',e=>{ e.preventDefault(); tune(e.deltaY<0?1:-1); }, {passive:false});
+  vfo.addEventListener('touchstart',e=>{dragging=true; lastY=e.touches[0].clientY;}, {passive:true});
+  vfo.addEventListener('touchmove',e=>{ if(!dragging) return; const dy=lastY-e.touches[0].clientY; if(Math.abs(dy)>=4){tune(dy>0?1:-1); lastY=e.touches[0].clientY;} }, {passive:true});
+  vfo.addEventListener('touchend',()=>dragging=false);
+
+  function makeDragKnob(id, key){
+    const el = document.getElementById(id); let dragging=false, lastY=0;
+    el.addEventListener('mousedown',e=>{dragging=true; lastY=e.clientY;});
+    window.addEventListener('mouseup',()=>dragging=false);
+    window.addEventListener('mousemove',e=>{ if(!dragging) return; const dy=lastY-e.clientY;
+      state[key]=Math.max(0,Math.min(1,state[key]+dy*0.006)); lastY=e.clientY; render(); });
+  }
+  ['af','sql','rf','mic','pwr','wpm'].forEach(k=>makeDragKnob('knob-'+k,k));
+  makeDragKnob('knob-compgain','compGain');
+  makeDragKnob('knob-voxgain','voxGain');
+  makeDragKnob('knob-voxdelay','voxDelay');
+  makeDragKnob('knob-nrlevel','nrLevel');
+  makeDragKnob('knob-cwpitch','cwPitch');
+
+  // S-meter
+  const smeter = document.getElementById('smeter');
+  const SEG_COUNT=18;
+  for(let i=0;i<SEG_COUNT;i++){ const seg=document.createElement('div'); seg.className='seg'; seg.style.height=(6+i*0.9)+'px'; smeter.appendChild(seg); }
+  const segs = smeter.querySelectorAll('.seg');
+  let meterLevel=0, meterTarget=0;
+  function setMeterTarget(v01){ meterTarget = Math.max(0,Math.min(1,v01)); }
+  function animateMeter(){
+    meterLevel += (meterTarget-meterLevel)*0.25;
+    const meterModeEl = document.getElementById('meter-mode');
+    if(meterModeEl) meterModeEl.textContent = txActive ? 'ALC' : 'S';
+    if(state.power){
+      const idle = 1 + Math.random()*1.2;
+      const lvl = Math.max(idle, meterLevel*SEG_COUNT);
+      segs.forEach((s,i)=>{ s.classList.toggle('on', i<lvl); s.classList.toggle('hi', i<lvl && i>11); });
+    } else { segs.forEach(s=>{s.classList.remove('on'); s.classList.remove('hi');}); }
+    requestAnimationFrame(animateMeter);
+  }
+  animateMeter();
+
+  // ---------------- QSO log UI ----------------
+  const qsoLog = document.getElementById('qso-log');
+  function tsLabel(ts){ const d=new Date(ts); return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  function rstFromLevel(level){
+    const s = Math.max(1, Math.min(9, Math.round(1+level*8)));
+    const r = state.mode==='CW' ? 5 : 5;
+    const t = state.mode==='CW' ? ' T'+Math.max(5,Math.min(9,Math.round(5+level*4))) : '';
+    return `${r}${s}${t}`;
+  }
+  function addLogEntry(msg, opts){
+    opts = opts||{};
+    const div = document.createElement('div');
+    div.className = 'qso-entry' + (opts.self?' self':'') + ((opts.weak||opts.toneBlocked)?' weak':'');
+    const rst = msg.level!==undefined ? `<span class="rst">RST ${rstFromLevel(msg.level)}</span> ` : '';
+    let body = '';
+    if(opts.toneBlocked){
+      body = '(tom CTCSS incompatível — squelch fechado)';
+    } else if(msg.type==='voice'){
+      body = opts.weak ? '(sinal abaixo do squelch)' : '[voz]';
+    } else {
+      body = escapeHtml(msg.text||'');
+    }
+    div.innerHTML = `<span class="ts">${tsLabel(msg.ts)}</span><span class="cs">${escapeHtml(msg.callsign)}</span> ${rst}<span class="txt"> ${body}</span>`;
+    if(msg.type==='voice' && msg.audioData && !opts.weak && !opts.toneBlocked){
+      const btn = document.createElement('button');
+      btn.className='play-btn'; btn.textContent='▶';
+      btn.addEventListener('click',()=>playAudioData(msg.audioData, msg.level));
+      div.appendChild(btn);
+    }
+    qsoLog.appendChild(div);
+    qsoLog.scrollTop = qsoLog.scrollHeight;
+    while(qsoLog.children.length>60) qsoLog.removeChild(qsoLog.firstChild);
+  }
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  // ---------------- WebSocket network layer ----------------
+  const connDot = document.getElementById('conn-dot');
+  const connLabel = document.getElementById('conn-label');
+  let reconnectAttempt = 0, wakingHintTimer = null, wsPingTimer = null;
+  function setConnUI(status, extra){
+    if(status==='on'){ connDot.style.background='#4caf50'; connDot.style.boxShadow='0 0 6px #4caf50'; connLabel.textContent='conectado'; }
+    else if(status==='connecting'){ connDot.style.background='#e8b23d'; connDot.style.boxShadow='0 0 6px #e8b23d'; connLabel.textContent=extra||'conectando...'; }
+    else { connDot.style.background='#7a1c14'; connDot.style.boxShadow='none'; connLabel.textContent=extra||'desconectado'; }
+  }
+
+  function connectWS(){
+    if(!state.serverUrl) return;
+    wsShouldReconnect = true;
+    setConnUI('connecting');
+    if(wakingHintTimer) clearTimeout(wakingHintTimer);
+    wakingHintTimer = setTimeout(()=>{
+      if(!wsConnected) setConnUI('connecting', 'servidor pode estar hibernando, aguarde...');
+    }, 4000);
+    try{ ws = new WebSocket(state.serverUrl); }
+    catch(e){ addSystemLine('Endereço de servidor inválido.'); setConnUI('off'); return; }
+
+    ws.onopen = ()=>{
+      wsConnected = true; reconnectAttempt = 0; setConnUI('on');
+      if(wsPingTimer) clearInterval(wsPingTimer);
+      wsPingTimer = setInterval(()=>{ if(ws && ws.readyState===WebSocket.OPEN){ try{ ws.send('{"type":"ping"}'); }catch(e){} } }, 25000);
+      if(wakingHintTimer){ clearTimeout(wakingHintTimer); wakingHintTimer=null; }
+      if(wsReconnectTimer){ clearTimeout(wsReconnectTimer); wsReconnectTimer=null; }
+      if(state.power && currentChannelKey){ wsListen(); }
+    };
+    ws.onclose = ()=>{
+      wsConnected = false;
+      if(wsPingTimer){ clearInterval(wsPingTimer); wsPingTimer=null; }
+      if(wsShouldReconnect){
+        reconnectAttempt++;
+        const delay = Math.min(20000, 1500 * Math.pow(1.6, reconnectAttempt));
+        setConnUI('off', `reconectando em ${Math.round(delay/1000)}s...`);
+        wsReconnectTimer = setTimeout(connectWS, delay);
+      } else { setConnUI('off'); }
+    };
+    ws.onerror = ()=>{ /* onclose fires afterwards */ };
+    ws.onmessage = (ev)=>{
+      let msg; try{ msg = JSON.parse(ev.data); }catch(e){ return; }
+      if(msg.type==='history'){
+        if(msg.channel!==currentChannelKey) return;
+        qsoLog.innerHTML=''; seenIds=new Set();
+        (msg.messages||[]).slice(-8).forEach(m=>{
+          seenIds.add(m.id);
+          const isSelf = m.callsign===state.callsign;
+          const weak = !isSelf && (m.level!==undefined) && (m.level < state.sql);
+          addLogEntry(m, {self:isSelf, weak});
+        });
+      } else if(msg.type==='qso'){
+        if(msg.channel===currentChannelKey) handleIncomingMessage(msg.payload);
+      } else if(msg.type==='qso-stream'){
+        if(msg.channel===currentChannelKey) handleStreamMessage(msg.payload);
+      } else if(msg.type==='roster'){
+        if(msg.channel===currentChannelKey) updateRoster(msg.stations||[]);
+      } else if(msg.type==='spots'){
+        clusterSpots = msg.spots||[];
+        renderCluster();
+      } else if(msg.type==='spot'){
+        clusterSpots.push(msg.spot);
+        while(clusterSpots.length>25) clusterSpots.shift();
+        renderCluster();
+      } else if(msg.type==='auth_error'){
+        wsShouldReconnect = false;
+        addSystemLine('Senha do servidor incorreta ou ausente. Corrija o campo "Senha do servidor" e recarregue a página.');
+        setConnUI('off', 'senha incorreta');
+      }
+    };
+  }
+
+  function currentListenChannels(){
+    // ouve sempre o canal principal (RX). Em split, também temos o canal TX
+    // separado para onde enviamos — mas não precisamos "ouvir" nosso próprio TX.
+    return [currentChannelKey];
+  }
+  function wsListen(){
+    if(!ws || ws.readyState!==WebSocket.OPEN || !currentChannelKey) return;
+    ws.send(JSON.stringify({type:'listen', channels:currentListenChannels(), callsign:state.callsign, password:state.password||''}));
+  }
+  function wsSendQso(channel, payload){
+    if(!ws || ws.readyState!==WebSocket.OPEN){ addSystemLine('Sem conexão com o servidor — mensagem não enviada.'); return false; }
+    ws.send(JSON.stringify({type:'qso', channel, payload}));
+    return true;
+  }
+  function wsSendStream(channel, payload){
+    if(!ws || ws.readyState!==WebSocket.OPEN) return false;
+    try{ ws.send(JSON.stringify({type:'qso-stream', channel, payload})); }catch(e){ /* clipe cai no fallback do final */ }
+    return true;
+  }
+  function txChannelKey(){
+    // TX nunca usa o deslocamento do RIT (isso é só recepção) — sempre a frequência
+    // real do VFO, ou a de TX separada quando SPLIT ou DUP (repetidora) está ativo.
+    if(state.dup && state.mode==='FM'){
+      return channelKeyFor(state.freq + standardDuplexOffsetHz(state.freq), state.mode);
+    }
+    return channelKeyFor(state.split ? state.txFreq : state.freq, state.mode);
+  }
+
+  function toneBlocked(m, isSelf){
+    return !isSelf && state.mode==='FM' && state.tsql && m.tone!==undefined && Math.abs(m.tone-state.tone) > 0.05;
+  }
+  function handleIncomingMessage(m){
+    if(seenIds.has(m.id)) return;
+    seenIds.add(m.id);
+    const isSelf = m.callsign===state.callsign;
+    const weak = !isSelf && (m.level!==undefined) && (m.level < state.sql);
+    const tBlocked = toneBlocked(m, isSelf);
+    addLogEntry(m, {self:isSelf, weak, toneBlocked:tBlocked});
+    if(isSelf || weak || tBlocked) return;
+    setMeterTarget((m.level!==undefined?m.level:0.5) * (state.pre?1.2:1) * (state.att?0.6:1));
+    // só suprime o clipe de reserva se o ao vivo cobriu a maior parte da fala
+    let covered = 0;
+    if(m.streamId){ const le = liveStreams.get(m.streamId); covered = le ? le.playedSec : (livePlayedSec.get(m.streamId)||0); }
+    const alreadyLive = m.streamId && (m.dur ? covered >= m.dur*0.7 : covered > 0.3);
+    if(m.type==='voice') console.log('[clip] cobertura ao vivo', covered.toFixed(2)+'s de', m.dur||'?', '-> ', alreadyLive?'suprime clipe':'toca clipe');
+    if(m.type==='voice' && m.audioData && !alreadyLive){ playAudioData(m.audioData, m.level); }
+    else if(m.type==='cw'){ playMorse(m.text, wpmValue()); }
+    maybeLogContact(m);
+  }
+
+  // ---------------- Streaming de voz ao vivo (recepção) ----------------
+  // Cada mensagem que chega já é amostras PCM cruas (sem nenhum formato de
+  // arquivo/codificação) — só remonta num AudioBuffer e agenda a reprodução logo
+  // depois do pedaço anterior, criando uma fila contínua e gapless.
+  const liveStreams = new Map(); // streamId -> {nextPlayTime, gotData, gain, analyser, mode}
+  const livePlayedSec = new Map(); // streamId -> segundos realmente tocados ao vivo
+  const LIVE_JITTER_SEC = 0.1;
+  const LIVE_MAX_LAG_SEC = 1.2; // acima disso o ao vivo já virou "atraso" — cai para o clipe
+  // reamostragem linear contínua (mantém estado entre pedaços, sem estalo na emenda)
+  function resampleLinear(inp, st, ratio){
+    const out = []; let prev = st.prev, t = st.t;
+    for(let i=0;i<inp.length;i++){
+      const cur = inp[i];
+      while(t <= 1){ out.push(prev + (cur-prev)*t); t += ratio; }
+      t -= 1; prev = cur;
+    }
+    st.prev = prev; st.t = t;
+    return Float32Array.from(out);
+  }
+  // BUG REAL (encontrado na auditoria): playedLiveStreamIds e liveStreams podiam
+  // crescer pra sempre — playedLiveStreamIds nunca tinha entradas removidas (leak
+  // linear com o número de transmissões da sessão), e se a mensagem 'end' se
+  // perdesse (queda de rede no meio de uma fala), a entrada em liveStreams (com os
+  // AudioNodes gain/analyser presos a ctx.destination) e o loop liveMeterLoop
+  // ficavam órfãos pra sempre. As duas correções abaixo: (1) remove o id de
+  // playedLiveStreamIds depois de um tempo curto — só precisa existir o
+  // suficiente pra chegar o clipe de reserva; (2) força a limpeza de qualquer
+  // stream "start" que nunca receba "end" dentro de um prazo de segurança.
+  const LIVE_STREAM_SAFETY_MS = 20000; // maior que o teto de 15s do PTT, com folga
+  function cleanupLiveStream(streamId){
+    const entry = liveStreams.get(streamId);
+    if(entry){
+      try{ entry.input.disconnect(); }catch(e){}
+      try{ entry.gain.disconnect(); }catch(e){}
+      try{ entry.analyser.disconnect(); }catch(e){}
+    }
+    liveStreams.delete(streamId);
+  }
+  function handleStreamMessage(p){
+    if(!p || !p.streamId) return;
+    if(p.kind==='start'){
+      if(p.callsign===state.callsign) return; // ignora o próprio streaming
+      if(toneBlocked(p, false)) return; // TSQL: sem tom certo, nem começa a tocar ao vivo
+      const ctx = ensureAudioCtx();
+      const gain = ctx.createGain();
+      gain.gain.value = state.af * (state.att?0.5:1) * (state.pre?1.3:1);
+      const analyser = ctx.createAnalyser(); analyser.fftSize=256;
+      gain.connect(analyser); gain.connect(ctx.destination);
+      // UMA cadeia de recepção por stream (antes era uma por pedaço de 20 ms,
+      // o que zerava os filtros 50x/s e gerava o zumbido/distorção).
+      // O filtro de modo e o compressor já foram aplicados no TX; aqui só ANF/NR.
+      const input = ctx.createGain();
+      applyRxDsp(ctx, input).connect(gain);
+      liveStreams.set(p.streamId, {
+        nextPlayTime: 0, started:false, playedSec:0, chunks:0, gotData:false, degraded:false, lastSeq:undefined, sources:[], rs:{prev:0,t:1}, input, gain, analyser, mode: p.mode || state.mode,
+        safetyTimer: setTimeout(()=>cleanupLiveStream(p.streamId), LIVE_STREAM_SAFETY_MS)
+      });
+      playSquelchBurst('open');
+      liveMeterLoop(p.streamId);
+    } else if(p.kind==='pcm'){
+      playLivePcmChunk(p.streamId, p.data, p.sr, p.seq);
+    } else if(p.kind==='end'){
+      const entry = liveStreams.get(p.streamId);
+      if(entry){
+        if(entry.safetyTimer) clearTimeout(entry.safetyTimer);
+        if(entry.gotData){
+          livePlayedSec.set(p.streamId, entry.playedSec);
+          setTimeout(()=>{ livePlayedSec.delete(p.streamId); }, LIVE_STREAM_SAFETY_MS);
+        }
+        console.log('[live] fim', p.streamId, 'pedacos', entry.chunks, 'tocado', entry.playedSec.toFixed(2)+'s');
+      }
+      // não corta o áudio que ainda está agendado (se chegou em rajada)
+      const tail = entry ? Math.max(0, entry.nextPlayTime - ensureAudioCtx().currentTime) : 0;
+      if(entry && entry.gotData && !entry.degraded) playSquelchBurst('tail', ensureAudioCtx().currentTime + tail);
+      setTimeout(()=>{ cleanupLiveStream(p.streamId); }, 4000 + tail*1000);
+    }
+  }
+  function degradeLiveStream(entry, streamId, why){
+    if(entry.degraded) return;
+    entry.degraded = true;
+    entry.playedSec = 0; // cobertura zero -> o clipe completo toca quando chegar
+    entry.sources.forEach(s=>{ try{ s.stop(); }catch(e){} });
+    entry.sources.length = 0;
+    console.log('[live] degradado', streamId, why, '-> clipe completo toca no fim');
+  }
+  function playLivePcmChunk(streamId, base64, sampleRate, seq){
+    const entry = liveStreams.get(streamId);
+    if(!entry || entry.degraded) return;
+    if(seq!==undefined){
+      if(entry.lastSeq!==undefined && seq!==entry.lastSeq+1){ degradeLiveStream(entry, streamId, 'perda de pedacos'); return; }
+      entry.lastSeq = seq;
+    }
+    try{
+      const ctx = ensureAudioCtx();
+      const bin = atob(base64);
+      const bytes = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      const int16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(int16.length);
+      for(let i=0;i<int16.length;i++){ float32[i] = int16[i]/32768; }
+      const lag = entry.nextPlayTime - ctx.currentTime;
+      if(entry.started && lag > LIVE_MAX_LAG_SEC){ degradeLiveStream(entry, streamId, 'atraso '+lag.toFixed(1)+'s'); return; }
+      const out = resampleLinear(float32, entry.rs, (sampleRate||ctx.sampleRate)/ctx.sampleRate);
+      if(!out.length) return;
+      const audioBuf = ctx.createBuffer(1, out.length, ctx.sampleRate);
+      audioBuf.copyToChannel(out, 0);
+      entry.gotData = true;
+      const src = ctx.createBufferSource(); src.buffer = audioBuf;
+      src.connect(entry.input);
+      entry.sources.push(src);
+      src.onended = ()=>{ const k = entry.sources.indexOf(src); if(k>=0) entry.sources.splice(k,1); };
+      // jitter buffer: começa um pouco adiante e re-sincroniza se a rede atrasar
+      if(!entry.started || lag < 0){
+        entry.nextPlayTime = ctx.currentTime + LIVE_JITTER_SEC;
+        entry.started = true;
+      }
+      const startAt = entry.nextPlayTime;
+      src.start(startAt);
+      entry.nextPlayTime = startAt + audioBuf.duration;
+      entry.playedSec += audioBuf.duration;
+      entry.chunks++;
+    }catch(e){ /* pedaço corrompido/curto demais — ignora e segue com os próximos */ }
+  }
+  function liveMeterLoop(streamId){
+    const entry = liveStreams.get(streamId);
+    if(!entry || !entry.analyser){ return; }
+    const data = new Uint8Array(entry.analyser.frequencyBinCount);
+    entry.analyser.getByteTimeDomainData(data);
+    let sum=0; for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+    setMeterTarget(Math.sqrt(sum/data.length)*3);
+    if(liveStreams.has(streamId)) requestAnimationFrame(()=>liveMeterLoop(streamId));
+  }
+
+  // ---------------- Logbook ----------------
+  let logbook = [];
+  let loggedKeys = new Set();
+  function maybeLogContact(m){
+    if(!m || m.callsign===state.callsign) return;
+    const bandIdx = nearestBandIdx(state.freq);
+    const band = bands[bandIdx].name;
+    const mode = m.mode || state.mode;
+    const key = m.callsign+'|'+band+'|'+mode;
+    if(loggedKeys.has(key)) return;
+    loggedKeys.add(key);
+    logbook.push({
+      callsign: m.callsign, band, mode, ts: Date.now(),
+      rst: rstFromLevel(m.level!==undefined?m.level:0.5)
+    });
+    renderLogbook();
+  }
+  function toAdifDate(ts){ const d=new Date(ts); return ''+d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0'); }
+  function toAdifTime(ts){ const d=new Date(ts); return String(d.getUTCHours()).padStart(2,'0')+String(d.getUTCMinutes()).padStart(2,'0')+String(d.getUTCSeconds()).padStart(2,'0'); }
+  function adifField(name, value){ value=String(value); return `<${name}:${value.length}>${value}`; }
+  function downloadTextFile(filename, content, mime){
+    const blob = new Blob([content], {type:mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  }
+  function exportAdif(){
+    if(!logbook.length){ addSystemLine('Nenhum contato para exportar ainda.'); return; }
+    let out = 'Exportado do emulador IC-706MKIIG QSO Net\n<EOH>\n';
+    logbook.forEach(e=>{
+      out += adifField('CALL', e.callsign) + adifField('QSO_DATE', toAdifDate(e.ts)) + adifField('TIME_ON', toAdifTime(e.ts))
+           + adifField('BAND', e.band+'M') + adifField('MODE', e.mode) + adifField('RST_RCVD', e.rst) + '<EOR>\n';
+    });
+    downloadTextFile('log_ic706.adi', out, 'text/plain');
+  }
+  function exportCsv(){
+    if(!logbook.length){ addSystemLine('Nenhum contato para exportar ainda.'); return; }
+    let out = 'Indicativo,Data (UTC),Hora (UTC),Banda,Modo,RST\n';
+    logbook.forEach(e=>{ out += `${e.callsign},${toAdifDate(e.ts)},${toAdifTime(e.ts)},${e.band}M,${e.mode},${e.rst}\n`; });
+    downloadTextFile('log_ic706.csv', out, 'text/csv');
+  }
+  function renderLogbook(){
+    document.getElementById('logbook-count').textContent = logbook.length;
+    const container = document.getElementById('logbook-table');
+    if(!logbook.length){ container.innerHTML='<div id="logbook-empty">Nenhum contato registrado ainda nesta sessão.</div>'; return; }
+    const rows = logbook.slice().reverse().map(e=>{
+      const d = new Date(e.ts);
+      return `<tr><td>${escapeHtml(e.callsign)}</td><td>${d.toLocaleTimeString('pt-BR')}</td><td>${e.band}M</td><td>${e.mode}</td><td>${e.rst}</td></tr>`;
+    }).join('');
+    container.innerHTML = `<table><thead><tr><th>Indicativo</th><th>Hora</th><th>Banda</th><th>Modo</th><th>RST</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  document.getElementById('logbook-toggle').addEventListener('click', ()=>{
+    const panel = document.getElementById('logbook-panel');
+    panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+  });
+  document.getElementById('logbook-adif').addEventListener('click', exportAdif);
+  document.getElementById('logbook-csv').addEventListener('click', exportCsv);
+  document.getElementById('logbook-clear').addEventListener('click', ()=>{ logbook=[]; loggedKeys=new Set(); renderLogbook(); });
+  renderLogbook();
+
+  // ---------------- Waterfall / espectro ----------------
+  const specCanvas = document.getElementById('spectrum-canvas');
+  const specCtx = specCanvas.getContext('2d');
+  const wfCanvas = document.getElementById('wf-canvas');
+  const wfCtx = wfCanvas.getContext('2d');
+  const rulerCanvas = document.getElementById('ruler-canvas');
+  const rulerCtx = rulerCanvas.getContext('2d');
+  const RULER_HALF_SPAN_HZ = 5000; // régua cobre ±5kHz ao redor da frequência sintonizada
+  const WF_BINS = 90;
+  let wfNoise = new Array(WF_BINS).fill(0).map(()=>0.06+Math.random()*0.06);
+  let specBins = new Array(WF_BINS).fill(0); // valores já suavizados, reaproveitados pelo espectro e pelo waterfall
+  function modeBumpWidth(mode){
+    switch(mode){ case 'CW': return 2.2; case 'AM': return 11; case 'FM': return 9; default: return 6.5; }
+  }
+
+  function drawRuler(){
+    const w = rulerCanvas.width, h = rulerCanvas.height;
+    rulerCtx.clearRect(0,0,w,h);
+    rulerCtx.fillStyle = '#08090a'; rulerCtx.fillRect(0,0,w,h);
+    for(let offset=-RULER_HALF_SPAN_HZ; offset<=RULER_HALF_SPAN_HZ; offset+=1000){
+      const x = w/2 + (offset/RULER_HALF_SPAN_HZ)*(w/2);
+      const isCenter = offset===0;
+      const isMajor = offset%2000===0;
+      const tickH = isCenter ? h*0.65 : (isMajor ? h*0.45 : h*0.28);
+      rulerCtx.strokeStyle = isCenter ? 'rgba(232,178,61,0.85)' : 'rgba(120,160,190,0.4)';
+      rulerCtx.lineWidth = isCenter ? 1.5 : 1;
+      rulerCtx.beginPath(); rulerCtx.moveTo(x+0.5, 1); rulerCtx.lineTo(x+0.5, 1+tickH); rulerCtx.stroke();
+      if(isCenter || isMajor){
+        let label;
+        if(isCenter){ const f = fmtFreq(state.freq); label = f.main+f.sub; }
+        else { label = (offset>0?'+':'') + (offset/1000); }
+        rulerCtx.font = isCenter ? 'bold 9px monospace' : '8px monospace';
+        rulerCtx.fillStyle = isCenter ? '#e8b23d' : '#7a8085';
+        rulerCtx.textBaseline = 'top';
+        rulerCtx.textAlign = offset<=-RULER_HALF_SPAN_HZ+500 ? 'left' : (offset>=RULER_HALF_SPAN_HZ-500 ? 'right' : 'center');
+        rulerCtx.fillText(label, x, h*0.55);
+      }
+    }
+  }
+
+  function drawSpectrumGrid(w,h){
+    specCtx.strokeStyle = 'rgba(120,160,190,0.12)';
+    specCtx.lineWidth = 1;
+    // linhas horizontais (níveis de referência, como num scope de verdade)
+    for(let g=1; g<4; g++){
+      const y = Math.round(h - (h*g/4)) + 0.5;
+      specCtx.beginPath(); specCtx.moveTo(0,y); specCtx.lineTo(w,y); specCtx.stroke();
+    }
+    // linha vertical central = sua frequência sintonizada
+    specCtx.strokeStyle = 'rgba(232,178,61,0.35)';
+    specCtx.beginPath(); specCtx.moveTo(w/2+0.5,0); specCtx.lineTo(w/2+0.5,h); specCtx.stroke();
+  }
+
+  function drawSpectrum(){
+    const w = specCanvas.width, h = specCanvas.height;
+    specCtx.clearRect(0,0,w,h);
+    specCtx.fillStyle = '#050810'; specCtx.fillRect(0,0,w,h);
+    drawSpectrumGrid(w,h);
+    if(!state.power){ return; }
+    const binW = w/WF_BINS;
+    // traça a curva (estilo osciloscópio/spectrum scope de rádio de verdade)
+    specCtx.beginPath();
+    for(let i=0;i<WF_BINS;i++){
+      const x = i*binW + binW/2;
+      const y = h - specBins[i]*h;
+      if(i===0) specCtx.moveTo(x,y); else specCtx.lineTo(x,y);
+    }
+    // fecha o polígono embaixo pra poder preencher com gradiente
+    const grad = specCtx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, 'rgba(120,220,255,0.55)');
+    grad.addColorStop(1, 'rgba(20,60,90,0.05)');
+    const lastX = (WF_BINS-1)*binW + binW/2;
+    specCtx.lineTo(lastX, h); specCtx.lineTo(0, h); specCtx.closePath();
+    specCtx.fillStyle = grad;
+    specCtx.fill();
+    // a linha de traço por cima, brilhante, como o "trace" de um scope
+    specCtx.beginPath();
+    for(let i=0;i<WF_BINS;i++){
+      const x = i*binW + binW/2;
+      const y = h - specBins[i]*h;
+      if(i===0) specCtx.moveTo(x,y); else specCtx.lineTo(x,y);
+    }
+    specCtx.strokeStyle = '#8fe0ff';
+    specCtx.lineWidth = 1.6;
+    specCtx.shadowColor = '#8fe0ff';
+    specCtx.shadowBlur = 4;
+    specCtx.stroke();
+    specCtx.shadowBlur = 0;
+  }
+
+  let wfFrameCount = 0;
+  function wfFrame(){
+    wfFrameCount++;
+    const centerBin = WF_BINS/2;
+    const width = modeBumpWidth(state.mode);
+    const amp = Math.max(0, meterLevel);
+    const noiseCeil = 0.16 * (1 + (1-bandConditions.score)*0.5);
+    if(state.power){
+      for(let i=0;i<WF_BINS;i++){
+        const target = noiseCeil*0.5;
+        wfNoise[i] += (Math.random()-0.5)*0.006 + (target - wfNoise[i])*0.04;
+        wfNoise[i] = Math.max(0.02, Math.min(noiseCeil, wfNoise[i]));
+        const d = (i-centerBin)/width;
+        const bump = amp * Math.exp(-d*d);
+        specBins[i] = Math.min(1, wfNoise[i] + bump);
+      }
+    } else {
+      specBins.fill(0);
+    }
+    drawSpectrum();
+    // Desenha uma linha nova no waterfall a cada 3 quadros (~20fps) — rolagem
+    // mais lenta e menos "nervosa" aos olhos.
+    if(wfFrameCount % 3 === 0){
+      const w = wfCanvas.width, h = wfCanvas.height;
+      wfCtx.drawImage(wfCanvas, 0,0,w,h-1, 0,1,w,h-1);
+      const binW = w/WF_BINS;
+      if(!state.power){
+        wfCtx.fillStyle = '#050606'; wfCtx.fillRect(0,0,w,1);
+      } else {
+        for(let i=0;i<WF_BINS;i++){
+          const val = specBins[i];
+          // Paleta calma: fundo azul-escuro → verde → âmbar só em sinal forte.
+          const hue = 205 - val*95;
+          const sat = 35 + val*45;
+          const light = 12 + val*44;
+          wfCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+          wfCtx.fillRect(Math.floor(i*binW), 0, Math.ceil(binW)+1, 1);
+        }
+      }
+    }
+    requestAnimationFrame(wfFrame);
+  }
+  wfFrame();
+
+  const rosterEl = document.getElementById('roster-list');
+  function updateRoster(stations){
+    if(!rosterEl) return;
+    if(!stations.length){ rosterEl.textContent='(ninguém mais ouvindo este canal)'; return; }
+    rosterEl.innerHTML = stations.map(cs=>{
+      const isSelf = cs===state.callsign;
+      return `<span class="roster-chip${isSelf?' self':''}">${escapeHtml(cs)}${isSelf?' (você)':''}</span>`;
+    }).join(' ');
+  }
+
+  // ---------------- DX Cluster (atividade global do servidor) ----------------
+  let clusterSpots = [];
+  function renderCluster(){
+    const el = document.getElementById('cluster-list');
+    if(!el) return;
+    if(!clusterSpots.length){ el.innerHTML='<div id="cluster-empty">Nenhuma atividade registrada ainda.</div>'; return; }
+    const rows = clusterSpots.slice().reverse().map(s=>{
+      const f = fmtFreq(s.freqHz);
+      const d = new Date(s.ts);
+      const typeLbl = s.type==='voice'?'🎙':(s.type==='cw'?'—•—':'⌨');
+      return `<div class="spot-row" data-freq="${s.freqHz}" data-mode="${escapeHtml(s.mode)}">
+        <span class="spot-freq">${f.main}${f.sub} ${escapeHtml(s.mode)}</span>
+        <span class="spot-cs">${typeLbl} ${escapeHtml(s.callsign)}</span>
+        <span class="spot-ts">${d.toLocaleTimeString('pt-BR')}</span>
+      </div>`;
+    }).join('');
+    el.innerHTML = rows;
+    el.querySelectorAll('.spot-row').forEach(row=>{
+      row.addEventListener('click', ()=>{
+        if(!state.power) return;
+        state.freq = Number(row.dataset.freq);
+        state.mode = row.dataset.mode;
+        render();
+      });
+    });
+    renderBandScope();
+  }
+  document.getElementById('cluster-toggle').addEventListener('click', ()=>{
+    const panel = document.getElementById('cluster-panel');
+    panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+  });
+  renderCluster();
+
+  // ---------------- Simple Band Scope (real, como no 706: varre 14 passos ao
+  // redor da frequência mostrada e plota "força de sinal" — aqui usando atividade
+  // de verdade vinda do DX Cluster, não inventada) ----------------
+  let scopeTimer = null;
+  function renderBandScope(){
+    const el = document.getElementById('scope-bars');
+    if(!el) return;
+    const now = Date.now();
+    const bars = [];
+    for(let offset=-6; offset<=7; offset++){
+      const freq = state.freq + offset*state.step;
+      const bucket = Math.round(freq/1000)*1000;
+      let strength = 0, count = 0;
+      clusterSpots.forEach(s=>{
+        if(Math.round(s.freqHz/1000)*1000 === bucket){
+          const ageMin = (now - s.ts)/60000;
+          if(ageMin < 10){ strength = Math.max(strength, 1 - ageMin/10); count++; }
+        }
+      });
+      bars.push({offset, strength, count, isCurrent: offset===0});
+    }
+    el.innerHTML = bars.map(b=>{
+      const h = Math.max(3, Math.round(b.strength*54));
+      return `<div class="scope-bar${b.isCurrent?' current':''}" style="height:${h}px;" title="${b.count} spot(s) recente(s)"></div>`;
+    }).join('');
+  }
+  document.getElementById('scope-toggle').addEventListener('click', ()=>{
+    const panel = document.getElementById('scope-panel');
+    const showing = panel.style.display==='none';
+    panel.style.display = showing ? 'block' : 'none';
+    if(showing){
+      renderBandScope();
+      if(scopeTimer) clearInterval(scopeTimer);
+      scopeTimer = setInterval(renderBandScope, 4000);
+    } else if(scopeTimer){ clearInterval(scopeTimer); scopeTimer=null; }
+  });
+
+  // ---------------- Memórias de canal (freq + modo + tom, só na sessão atual) ----------------
+  const MEM_SLOTS = 10;
+  let memories = new Array(MEM_SLOTS).fill(null);
+  function renderMemories(){
+    const grid = document.getElementById('mem-grid');
+    if(!grid) return;
+    grid.innerHTML = memories.map((m,i)=>{
+      if(!m){
+        return `<div class="mem-slot" data-idx="${i}">
+          <div class="mem-num">CH ${i}</div>
+          <div class="mem-freq">vazio</div>
+          <button class="mem-write" data-write="${i}">GRAVAR</button>
+        </div>`;
+      }
+      const f = fmtFreq(m.freq);
+      return `<div class="mem-slot filled${scanActive && scanIndex===i ? ' scanning' : ''}" data-idx="${i}">
+        <div class="mem-num">CH ${i}</div>
+        <div class="mem-freq">${f.main}${f.sub}</div>
+        <div class="mem-mode">${m.mode}${m.dup?' DUP':''}</div>
+        <button class="mem-write" data-write="${i}">REGRAVAR</button>
+      </div>`;
+    }).join('');
+    grid.querySelectorAll('.mem-slot').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        if(e.target.classList.contains('mem-write')) return; // trata separado abaixo
+        const idx = Number(el.dataset.idx);
+        const m = memories[idx];
+        if(!m || !state.power) return;
+        state.freq = m.freq; state.mode = m.mode; state.tone = m.tone;
+        state.dup = !!m.dup;
+        render();
+      });
+    });
+    grid.querySelectorAll('.mem-write').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        if(!state.power) return;
+        const idx = Number(btn.dataset.write);
+        memories[idx] = { freq: state.freq, mode: state.mode, tone: state.tone, dup: state.dup };
+        renderMemories();
+      });
+    });
+  }
+  document.getElementById('mem-toggle').addEventListener('click', ()=>{
+    const panel = document.getElementById('mem-panel');
+    panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+    if(panel.style.display==='block') renderMemories();
+  });
+
+  // Scan real: percorre canais de memória preenchidos; se houver atividade
+  // recente (spot de verdade do DX Cluster) naquele canal, demora mais ali —
+  // igual a um scan de rádio de verdade que pausa quando detecta sinal.
+  let scanActive = false, scanIndex = -1, scanTimer = null;
+  function hasRecentActivity(freqHz){
+    const now = Date.now();
+    const bucket = Math.round(freqHz/1000)*1000;
+    return clusterSpots.some(s => Math.round(s.freqHz/1000)*1000===bucket && (now-s.ts) < 5*60*1000);
+  }
+  function scanStep(){
+    if(!scanActive || !state.power) return;
+    const filled = memories.map((m,i)=>({m,i})).filter(x=>x.m);
+    if(filled.length===0){ stopScan(); addSystemLine('Nenhum canal de memória gravado — grave ao menos um pra usar o SCAN.'); return; }
+    let pos = filled.findIndex(x=>x.i===scanIndex);
+    pos = (pos+1) % filled.length;
+    scanIndex = filled[pos].i;
+    const m = filled[pos].m;
+    state.freq = m.freq; state.mode = m.mode; state.tone = m.tone; state.dup = !!m.dup;
+    render();
+    renderMemories();
+    const dwell = hasRecentActivity(m.freq) ? 8000 : 1500; // pausa mais tempo onde há atividade real
+    scanTimer = setTimeout(scanStep, dwell);
+  }
+  function startScan(){
+    if(!state.power) return;
+    if(!memories.some(m=>m)){ addSystemLine('Nenhum canal de memória gravado — grave ao menos um pra usar o SCAN.'); return; }
+    scanActive = true;
+    document.getElementById('scan-toggle').classList.add('active');
+    scanStep();
+  }
+  function stopScan(){
+    scanActive = false;
+    if(scanTimer){ clearTimeout(scanTimer); scanTimer=null; }
+    document.getElementById('scan-toggle').classList.remove('active');
+    renderMemories();
+  }
+  document.getElementById('scan-toggle').addEventListener('click', ()=>{
+    if(scanActive) stopScan(); else startScan();
+  });
+
+  document.getElementById('help-toggle').addEventListener('click', ()=>{
+    const panel = document.getElementById('help-panel');
+    panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+  });
+
+  function switchChannel(newKey){
+    currentChannelKey = newKey;
+    seenIds = new Set();
+    qsoLog.innerHTML='';
+    if(rosterEl) rosterEl.textContent='';
+    if(wsConnected){ wsListen(); }
+  }
+
+  async function appendMessage(msg){
+    seenIds.add(msg.id);
+    return wsSendQso(txChannelKey(), msg);
+  }
+
+  function buildFadeCurve(durationSec){
+    const steps = Math.max(4, Math.min(200, Math.round(durationSec*8)));
+    const curve = new Float32Array(steps);
+    let v = 0.85;
+    for(let i=0;i<steps;i++){
+      v += (Math.random()-0.5)*0.18;
+      v = Math.max(0.45, Math.min(1.0, v));
+      curve[i] = v;
+    }
+    return curve;
+  }
+  function computePeakAmplitude(audioBuffer){
+    let peak = 0;
+    for(let ch=0; ch<audioBuffer.numberOfChannels; ch++){
+      const data = audioBuffer.getChannelData(ch);
+      const step = Math.max(1, Math.floor(data.length/4000)); // amostragem, evita varrer tudo em clipes longos
+      for(let i=0;i<data.length;i+=step){
+        const a = Math.abs(data[i]);
+        if(a>peak) peak=a;
+      }
+    }
+    return peak;
+  }
+  // Filtro de Notch Automático (ANF) e Redução de Ruído (NR) — reais no 706,
+  // p.24 do manual. Simplificação honesta: o ANF real é adaptativo (varre e
+  // cancela um tom específico automaticamente); aqui aplicamos um entalhe fixo
+  // em 1kHz (frequência clássica de batimento/apito) quando ligado. O NR real
+  // usa DSP espectral; aqui aproximamos reduzindo a banda passante conforme o
+  // nível ajustado — reduz chiado perceptível, sem ser um algoritmo espectral completo.
+  function applyRxDsp(ctx, node){
+    let cur = node;
+    if(state.anf){
+      const notch = ctx.createBiquadFilter();
+      notch.type='peaking'; notch.frequency.value=1000; notch.Q.value=8; notch.gain.value=-20;
+      cur.connect(notch); cur = notch;
+    }
+    if(state.nr){
+      const lp2 = ctx.createBiquadFilter();
+      lp2.type='lowpass'; lp2.frequency.value = 3200 - state.nrLevel*1800;
+      cur.connect(lp2); cur = lp2;
+    }
+    return cur;
+  }
+  // Barulhos clássicos de rádio: "squelch crash" quando a estação que você ouve
+  // começa a transmitir (abre o squelch) e "squelch tail" quando ela solta o PTT,
+  // mais um clique de relé local quando VOCÊ aperta/solta o PTT.
+  function playSquelchBurst(kind, when){
+    if(!state.power || state.sql >= 0.9) return; // squelch fechado = silêncio
+    try{
+      const ctx = ensureAudioCtx();
+      const dur = kind==='tail' ? 0.2 : 0.07;
+      const n = Math.max(1, Math.ceil(ctx.sampleRate*dur));
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      const atk = ctx.sampleRate*0.003;
+      for(let i=0;i<n;i++){
+        const x = i/n;
+        const env = Math.pow(1-x, kind==='tail' ? 2.2 : 1.6) * Math.min(1, i/atk);
+        d[i] = (Math.random()*2-1) * env;
+      }
+      const spec = modeFilterSpec(state.mode);
+      const bp = ctx.createBiquadFilter(); bp.type='bandpass';
+      bp.frequency.value = (spec.hp+spec.lp)/2; bp.Q.value = 0.6;
+      const g = ctx.createGain();
+      g.gain.value = 0.28 * state.af * (state.att?0.5:1) * (state.pre?1.2:1);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+      src.start(Math.max(ctx.currentTime, when||0));
+    }catch(e){ /* não crítico */ }
+  }
+  function playTxClick(){
+    if(!state.power) return;
+    try{
+      const ctx = ensureAudioCtx();
+      const n = Math.ceil(ctx.sampleRate*0.03);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for(let i=0;i<n;i++){ d[i] = (Math.random()*2-1) * Math.pow(1-i/n, 4); }
+      const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 1200;
+      const g = ctx.createGain(); g.gain.value = 0.12;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      src.connect(hp); hp.connect(g); g.connect(ctx.destination);
+      src.start();
+    }catch(e){ /* não crítico */ }
+  }
+  async function playAudioData(base64data, level){
+    try{
+      const ctx = ensureAudioCtx();
+      const bin = atob(base64data.split(',').pop());
+      const bytes = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      const audioBuf = await ctx.decodeAudioData(bytes.buffer.slice(0));
+      const src = ctx.createBufferSource(); src.buffer=audioBuf;
+      const rxChain0 = buildFilterChain(ctx, src, state.mode, agcReleaseSec());
+      const rxChain = applyRxDsp(ctx, rxChain0);
+      const fadeGain = ctx.createGain();
+      const dur = audioBuf.duration || 1;
+      fadeGain.gain.setValueCurveAtTime(buildFadeCurve(dur), ctx.currentTime, dur);
+      // AGC simples: normaliza o pico do áudio recebido para um alvo constante,
+      // assim uma transmissão fraca e uma forte chegam com volume parecido —
+      // como o AGC de um receptor de verdade faz.
+      const peak = computePeakAmplitude(audioBuf);
+      const AGC_TARGET = 0.5;
+      const agcMul = peak > 0.01 ? Math.max(0.4, Math.min(3.5, AGC_TARGET/peak)) : 1;
+      const gain = ctx.createGain();
+      gain.gain.value = state.af * (state.att?0.5:1) * (state.pre?1.3:1) * agcMul;
+      rxChain.connect(fadeGain); fadeGain.connect(gain); gain.connect(ctx.destination);
+      const analyser = ctx.createAnalyser(); analyser.fftSize=256;
+      gain.connect(analyser);
+      src.start();
+      playSquelchBurst('open'); playSquelchBurst('tail', ctx.currentTime + dur);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let raf;
+      function meterLoop(){
+        analyser.getByteTimeDomainData(data);
+        let sum=0; for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+        const rms = Math.sqrt(sum/data.length);
+        setMeterTarget(Math.max(level||0.4, rms*3));
+        raf = requestAnimationFrame(meterLoop);
+      }
+      meterLoop();
+      src.onended = ()=>{ cancelAnimationFrame(raf); setMeterTarget(0.1); };
+    }catch(e){
+      console.error('playback failed', e);
+      addSystemLine('Não foi possível reproduzir essa transmissão de voz (formato de áudio incompatível entre navegadores).');
+    }
+  }
+
+  function playMorse(text, wpm){
+    const ctx = ensureAudioCtx();
+    const unit = 1.2/wpm;
+    let t = ctx.currentTime + 0.05;
+    const osc = ctx.createOscillator(); osc.type='sine'; osc.frequency.value=cwPitchHz();
+    const gain = ctx.createGain(); gain.gain.value=0;
+    osc.connect(gain); gain.connect(ctx.destination); osc.start();
+    (text||'').toUpperCase().split('').forEach(ch=>{
+      if(ch===' '){ t += unit*7; return; }
+      const code = MORSE[ch]; if(!code){ t+=unit*2; return; }
+      code.split('').forEach(sym=>{
+        const dur = sym==='.' ? unit : unit*3;
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.setValueAtTime(0, t+dur*0.85);
+        t += dur + unit;
+      });
+      t += unit*2; // letter gap (total 3 incl above)
+    });
+    osc.stop(t+0.1);
+    setMeterTarget(0.55);
+  }
+
+  // ---------------- PTT / voice ----------------
+  const pttBtn = document.getElementById('ptt-btn');
+  let txStartMs = 0, pttSeq = 0;
+  let txStreamId = null, txStreamSeq = 0, pcmCaptureNode = null, pcmSilentGain = null;
+
+  // Captura ao vivo via AudioWorklet: pega o áudio já processado (mesma cadeia de
+  // filtros SSB/AM/FM) em amostras PCM cruas e manda pela rede sem codificar nada.
+  async function startLivePcmCapture(ctx, sourceChain, channel, streamId){
+    await ensurePcmWorklet(ctx);
+    const chunkSamples = Math.round(PCM_TARGET_RATE * PCM_CHUNK_MS / 1000);
+    pcmCaptureNode = new AudioWorkletNode(ctx, 'pcm-capture-processor', {
+      numberOfInputs:1, numberOfOutputs:1, channelCount:1,
+      processorOptions:{ chunkSamples, targetRate: PCM_TARGET_RATE }
+    });
+    sourceChain.connect(pcmCaptureNode);
+    pcmSilentGain = ctx.createGain(); pcmSilentGain.gain.value = 0;
+    pcmCaptureNode.connect(pcmSilentGain); pcmSilentGain.connect(ctx.destination);
+    let seq = 0;
+    pcmCaptureNode.port.onmessage = (ev)=>{
+      // rede lenta: se a fila do socket crescer, descarta (o seq pula e o receptor
+      // passa a usar o clipe completo) em vez de acumular atraso.
+      if(ws && ws.bufferedAmount > 150000){ seq++; return; }
+      const bytes = new Uint8Array(ev.data);
+      let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+      const b64 = btoa(bin);
+      wsSendStream(channel, {kind:'pcm', streamId, seq:seq++, sr:PCM_TARGET_RATE, data:b64});
+    };
+  }
+  function stopLivePcmCapture(){
+    if(pcmCaptureNode){ try{ pcmCaptureNode.disconnect(); }catch(e){} pcmCaptureNode=null; }
+    if(pcmSilentGain){ try{ pcmSilentGain.disconnect(); }catch(e){} pcmSilentGain=null; }
+  }
+
+  async function startPTT(){
+    if(!state.power || ptt) return;
+    if(state.mode==='CW') return; // use CW key instead
+    const myToken = ++pttSeq;
+    ptt = true; txActive = true; pttBtn.classList.add('txon'); playTxClick();
+    if(scanActive) stopScan(); // num rádio real, transmitir cancela o scan
+    try{
+      const ctx = ensureAudioCtx();
+      const gumStream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1, echoCancellation:true, noiseSuppression:true}});
+      // se soltou o PTT enquanto o mic abria, não deixa captura órfã
+      if(!ptt || myToken!==pttSeq){ gumStream.getTracks().forEach(t=>t.stop()); return; }
+      micStream = gumStream;
+      const src = ctx.createMediaStreamSource(micStream);
+      const gainNode = ctx.createGain(); gainNode.gain.value = 0.6 + state.mic*1.4;
+      src.connect(gainNode);
+      const chain = buildFilterChain(ctx, gainNode, state.mode, undefined, txCompParams());
+      recAnalyser = ctx.createAnalyser(); recAnalyser.fftSize=256; chain.connect(recAnalyser);
+      const dest = ctx.createMediaStreamDestination(); chain.connect(dest);
+      recChunks = []; recLevels=[]; txStartMs = Date.now();
+      mediaRecorder = createRecorder(dest.stream);
+      let streaming = false;
+      if(canStreamVoice()){
+        try{
+          txStreamId = 'v'+Date.now()+Math.random().toString(36).slice(2,7);
+          await startLivePcmCapture(ctx, chain, txChannelKey(), txStreamId);
+          if(!ptt || myToken!==pttSeq){ stopLivePcmCapture(); txStreamId = null; return; }
+          wsSendStream(txChannelKey(), {kind:'start', streamId:txStreamId, callsign:state.callsign, mode:state.mode, tone:state.tone, sr:ctx.sampleRate});
+          streaming = true;
+        }catch(e){ streaming = false; }
+      }
+      if(!streaming){ txStreamId = null; }
+      mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) recChunks.push(e.data); };
+      mediaRecorder.onstop = onRecordingStop;
+      mediaRecorder.start(); // sem timeslice — só queremos o clipe completo no final, como reserva
+      levelSampleLoop();
+      let secsLeft = 15;
+      const pttHintEl = document.getElementById('ptt-hint');
+      const pttHintOriginal = pttHintEl.textContent;
+      pttCountdownTimer = setInterval(()=>{
+        secsLeft--;
+        if(secsLeft>0) pttHintEl.textContent = `Transmitindo... corta em ${secsLeft}s`;
+      }, 1000);
+      pttSafetyTimer = setTimeout(()=>{ if(ptt) stopPTT(); }, 15000); // safety cap
+      ptt_restoreHint = ()=>{ pttHintEl.textContent = pttHintOriginal; };
+    }catch(e){
+      console.error('mic error', e);
+      const inFrame = (window.self !== window.top);
+      if(inFrame){
+        addSystemLine('Microfone bloqueado: este preview roda dentro de um iframe restrito do Claude, que não concede acesso ao microfone. Baixe o arquivo .html e abra-o diretamente no seu navegador (fora do Claude) para usar o PTT de voz. CW e texto funcionam normalmente aqui mesmo.');
+      } else if(location.protocol!=='https:' && location.hostname!=='localhost' && location.protocol!=='file:'){
+        addSystemLine('Microfone bloqueado: o navegador exige uma origem segura (https, localhost ou arquivo local) para acessar o microfone.');
+      } else {
+        addSystemLine('Não foi possível acessar o microfone (permissão negada pelo navegador ou nenhum microfone disponível).');
+      }
+      ptt=false; txActive=false; pttBtn.classList.remove('txon');
+    }
+  }
+  function levelSampleLoop(){
+    if(!ptt || !recAnalyser) return;
+    const data = new Uint8Array(recAnalyser.frequencyBinCount);
+    recAnalyser.getByteTimeDomainData(data);
+    let sum=0; for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+    recLevels.push(Math.sqrt(sum/data.length));
+    setMeterTarget(Math.min(1, Math.sqrt(sum/data.length)*3));
+    requestAnimationFrame(levelSampleLoop);
+  }
+  function stopPTT(){
+    if(!ptt) return;
+    ptt=false; txActive=false; pttBtn.classList.remove('txon'); playTxClick();
+    stopLivePcmCapture();
+    if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+    if(pttCountdownTimer){ clearInterval(pttCountdownTimer); pttCountdownTimer=null; }
+    if(pttSafetyTimer){ clearTimeout(pttSafetyTimer); pttSafetyTimer=null; }
+    if(ptt_restoreHint){ ptt_restoreHint(); ptt_restoreHint=null; }
+    setMeterTarget(0.1);
+  }
+  async function onRecordingStop(){
+    const streamIdUsed = txStreamId;
+    const durSec = txStartMs ? (Date.now()-txStartMs)/1000 : 0;
+    if(streamIdUsed){
+      wsSendStream(txChannelKey(), {kind:'end', streamId:streamIdUsed});
+      txStreamId = null;
+    }
+    if(recChunks.length===0) return;
+    const blob = new Blob(recChunks, {type:recChunks[0].type||'audio/webm'});
+    if(blob.size > 3*1024*1024){
+      addSystemLine('Gravação muito longa para enviar pela rede — segure o PTT por menos tempo.');
+      return;
+    }
+    const avgLevel = recLevels.length? Math.min(1, (recLevels.reduce((a,b)=>a+b,0)/recLevels.length)*4) : 0.5;
+    const reader = new FileReader();
+    reader.onloadend = ()=>{
+      const b64 = reader.result;
+      const id = 'v'+Date.now()+Math.random().toString(36).slice(2,7);
+      // inclui o streamId (se usado) para quem já ouviu ao vivo não tocar de novo
+      const msg = {id, callsign:state.callsign, ts:Date.now(), type:'voice', mode:state.mode, audioData:b64, level:avgLevel, streamId:streamIdUsed||undefined, dur:durSec, tone:state.tone};
+      const sent = wsSendQso(txChannelKey(), msg);
+      if(sent){ seenIds.add(id); addLogEntry(msg, {self:true}); }
+    };
+    reader.readAsDataURL(blob);
+  }
+  pttBtn.addEventListener('mousedown', startPTT);
+  pttBtn.addEventListener('touchstart', e=>{e.preventDefault(); startPTT();}, {passive:false});
+  window.addEventListener('mouseup', stopPTT);
+  pttBtn.addEventListener('touchend', stopPTT);
+  window.addEventListener('keydown', e=>{
+    if(e.code==='Space' && state.power && state.mode!=='CW' && !ptt && document.activeElement.id!=='text-input'){
+      e.preventDefault(); startPTT();
+    }
+  });
+  window.addEventListener('keyup', e=>{
+    if(e.code==='Space' && state.mode!=='CW'){ stopPTT(); }
+  });
+
+  // ---------------- VOX (transmissão ativada por voz) ----------------
+  let voxStream=null, voxAnalyser=null, voxDest=null, voxChain=null, voxMonitorRAF=null, voxTransmitting=false, voxSilenceTimer=null;
+  // VOX GAIN real: sensibilidade (limiar mais baixo = mais sensível). VOX DELAY real:
+  // tempo de espera em silêncio antes de soltar a transmissão automaticamente.
+  function voxOnThreshold(){ return 0.09 - state.voxGain*0.075; } // 0.09 (insensível) .. 0.015 (bem sensível)
+  function voxOffThreshold(){ return voxOnThreshold()*0.4; }
+  function voxHangMs(){ return 300 + state.voxDelay*1700; } // 300ms .. 2000ms
+  const voxBtn = document.getElementById('vox-btn');
+
+  async function enableVox(){
+    if(state.vox || state.mode==='CW') return;
+    try{
+      const ctx = ensureAudioCtx();
+      voxStream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1, echoCancellation:true, noiseSuppression:true}});
+      const src = ctx.createMediaStreamSource(voxStream);
+      const gainNode = ctx.createGain(); gainNode.gain.value = 0.6 + state.mic*1.4;
+      src.connect(gainNode);
+      const chain = buildFilterChain(ctx, gainNode, state.mode, undefined, txCompParams());
+      voxAnalyser = ctx.createAnalyser(); voxAnalyser.fftSize=256; chain.connect(voxAnalyser);
+      voxDest = ctx.createMediaStreamDestination(); chain.connect(voxDest);
+      voxChain = chain;
+      state.vox = true;
+      voxBtn.classList.add('active'); voxBtn.textContent='VOX: LIGADO (fale)';
+      pttBtn.disabled = true; pttBtn.style.opacity=0.4;
+      voxMonitorLoop();
+    }catch(e){
+      addSystemLine('Não foi possível ativar o VOX (microfone indisponível ou bloqueado).');
+    }
+  }
+  function disableVox(){
+    if(!state.vox) return;
+    state.vox = false;
+    voxBtn.classList.remove('active'); voxBtn.textContent='VOX: DESLIGADO';
+    pttBtn.disabled = false; pttBtn.style.opacity = 1;
+    if(voxMonitorRAF) cancelAnimationFrame(voxMonitorRAF);
+    if(voxTransmitting) endVoxTx();
+    if(voxStream){ voxStream.getTracks().forEach(t=>t.stop()); voxStream=null; }
+    voxAnalyser=null; voxDest=null; voxChain=null;
+  }
+  function voxMonitorLoop(){
+    if(!state.vox || !voxAnalyser) return;
+    const data = new Uint8Array(voxAnalyser.frequencyBinCount);
+    voxAnalyser.getByteTimeDomainData(data);
+    let sum=0; for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+    const rms = Math.sqrt(sum/data.length);
+    if(!voxTransmitting && rms>voxOnThreshold()){ beginVoxTx(); }
+    if(voxTransmitting){
+      setMeterTarget(Math.min(1, rms*3));
+      recLevels.push(rms);
+      if(rms>voxOffThreshold()){
+        if(voxSilenceTimer){ clearTimeout(voxSilenceTimer); voxSilenceTimer=null; }
+      } else if(!voxSilenceTimer){
+        voxSilenceTimer = setTimeout(endVoxTx, voxHangMs());
+      }
+    }
+    voxMonitorRAF = requestAnimationFrame(voxMonitorLoop);
+  }
+  function beginVoxTx(){
+    voxTransmitting = true; txActive = true; playTxClick();
+    pttBtn.classList.add('txon');
+    recChunks=[]; recLevels=[]; txStartMs = Date.now();
+    mediaRecorder = createRecorder(voxDest.stream);
+    const ctx = ensureAudioCtx();
+    if(canStreamVoice() && voxChain){
+      txStreamId = 'v'+Date.now()+Math.random().toString(36).slice(2,7);
+      startLivePcmCapture(ctx, voxChain, txChannelKey(), txStreamId).then(()=>{
+        wsSendStream(txChannelKey(), {kind:'start', streamId:txStreamId, callsign:state.callsign, mode:state.mode, tone:state.tone, sr:ctx.sampleRate});
+      }).catch(()=>{ txStreamId = null; });
+    } else {
+      txStreamId = null;
+    }
+    mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) recChunks.push(e.data); };
+    mediaRecorder.onstop = onRecordingStop;
+    mediaRecorder.start();
+  }
+  function endVoxTx(){
+    if(!voxTransmitting) return;
+    voxTransmitting = false; txActive = false; playTxClick();
+    pttBtn.classList.remove('txon');
+    stopLivePcmCapture();
+    if(voxSilenceTimer){ clearTimeout(voxSilenceTimer); voxSilenceTimer=null; }
+    if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+    setMeterTarget(0.1);
+  }
+  voxBtn.addEventListener('click', ()=>{
+    if(!state.power) return;
+    if(state.vox) disableVox(); else enableVox();
+  });
+
+  function addSystemLine(text){
+    const div = document.createElement('div');
+    div.className='qso-entry';
+    div.innerHTML = `<span class="ts">${tsLabel(Date.now())}</span><span class="txt" style="color:#c9a24a;">${escapeHtml(text)}</span>`;
+    qsoLog.appendChild(div); qsoLog.scrollTop=qsoLog.scrollHeight;
+  }
+
+  // ---------------- CW keyer ----------------
+  const cwKey = document.getElementById('cw-key');
+  const cwDecoded = document.getElementById('cw-decoded');
+  function cwDown_(){
+    if(!state.power || state.mode!=='CW' || cwDown) return;
+    if(cwFinalizeTimer){ clearTimeout(cwFinalizeTimer); cwFinalizeTimer=null; }
+    if(cwWordGapTimer){ clearTimeout(cwWordGapTimer); cwWordGapTimer=null; }
+    cwDown=true; cwKey.classList.add('down'); cwPressStart=Date.now();
+    const ctx = ensureAudioCtx();
+    cwOsc = ctx.createOscillator(); cwOsc.type='sine'; cwOsc.frequency.value=cwPitchHz();
+    cwGain = ctx.createGain(); cwGain.gain.value=0.001;
+    cwOsc.connect(cwGain); cwGain.connect(ctx.destination);
+    cwGain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+0.005);
+    cwOsc.start();
+    setMeterTarget(0.5);
+  }
+  function cwUp_(){
+    if(!cwDown) return;
+    cwDown=false; cwKey.classList.remove('down');
+    const dur = Date.now()-cwPressStart;
+    try{
+      const ctx = ensureAudioCtx();
+      cwGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.02);
+      cwOsc.stop(ctx.currentTime+0.03);
+    }catch(e){}
+    cwBuffer += (dur < ditMs()*2 ? '.' : '-');
+    cwLastUp = Date.now();
+    if(cwFinalizeTimer) clearTimeout(cwFinalizeTimer);
+    if(cwWordGapTimer){ clearTimeout(cwWordGapTimer); cwWordGapTimer=null; }
+    cwFinalizeTimer = setTimeout(finalizeCwLetter, ditMs()*3.2);
+    setMeterTarget(0.1);
+  }
+  function finalizeCwLetter(){
+    cwFinalizeTimer = null;
+    if(cwBuffer){
+      const ch = MORSE_REV[cwBuffer] || '?';
+      cwWordBuffer += ch;
+      cwBuffer='';
+      cwDecoded.textContent = cwWordBuffer;
+      // Full break-in (QSK real): cada letra decodificada já sai na rede na hora,
+      // sem esperar a palavra inteira — a aproximação possível do "ouvir entre os
+      // elementos" do QSK de verdade dentro do nosso sistema baseado em mensagens.
+      if(state.cwBreakIn==='full'){ sendCwText(ch); }
+    }
+    // se ficar em silêncio por mais tempo ainda, insere um espaço (fim de palavra)
+    // — ou, em modo semi break-in, envia a palavra inteira sozinho, sem precisar de ENVIAR CW.
+    if(cwWordGapTimer) clearTimeout(cwWordGapTimer);
+    cwWordGapTimer = setTimeout(()=>{
+      cwWordGapTimer = null;
+      if(state.cwBreakIn==='semi' && cwWordBuffer.trim()){
+        sendCwText(cwWordBuffer.trim());
+        cwWordBuffer=''; cwDecoded.textContent='';
+      } else if(cwWordBuffer && !cwWordBuffer.endsWith(' ')){
+        cwWordBuffer += ' ';
+        cwDecoded.textContent = cwWordBuffer;
+      }
+    }, ditMs()*4);
+  }
+  async function sendCwText(text){
+    if(!text) return false;
+    const id = 'c'+Date.now()+Math.random().toString(36).slice(2,7);
+    const msg = {id, callsign:state.callsign, ts:Date.now(), type:'cw', mode:'CW', text, level:0.7, tone:state.tone};
+    const sent = await appendMessage(msg);
+    if(sent) addLogEntry(msg, {self:true});
+    return sent;
+  }
+  cwKey.addEventListener('mousedown', cwDown_);
+  cwKey.addEventListener('mouseup', cwUp_);
+  cwKey.addEventListener('mouseleave', ()=>{ if(cwDown) cwUp_(); });
+  cwKey.addEventListener('touchstart', e=>{e.preventDefault(); cwDown_();}, {passive:false});
+  cwKey.addEventListener('touchend', cwUp_);
+  window.addEventListener('keydown', e=>{
+    if(e.code==='Space' && state.power && state.mode==='CW' && document.activeElement.id!=='text-input') { e.preventDefault(); cwDown_(); }
+  });
+  window.addEventListener('keyup', e=>{
+    if(e.code==='Space' && state.mode==='CW'){ cwUp_(); }
+  });
+  document.getElementById('cw-clear').addEventListener('click', ()=>{
+    cwBuffer=''; cwWordBuffer=''; cwDecoded.textContent='';
+    if(cwFinalizeTimer){ clearTimeout(cwFinalizeTimer); cwFinalizeTimer=null; }
+    if(cwWordGapTimer){ clearTimeout(cwWordGapTimer); cwWordGapTimer=null; }
+  });
+  document.getElementById('cw-send').addEventListener('click', async ()=>{
+    finalizeCwLetter();
+    if(state.cwBreakIn!=='full'){
+      const text = cwWordBuffer.trim();
+      if(text) await sendCwText(text);
+    }
+    cwWordBuffer=''; cwBuffer=''; cwDecoded.textContent='';
+    if(cwFinalizeTimer){ clearTimeout(cwFinalizeTimer); cwFinalizeTimer=null; }
+    if(cwWordGapTimer){ clearTimeout(cwWordGapTimer); cwWordGapTimer=null; }
+  });
+  document.getElementById('btn-brk').addEventListener('click', ()=>{
+    if(!state.power) return;
+    state.cwBreakIn = state.cwBreakIn==='off' ? 'semi' : (state.cwBreakIn==='semi' ? 'full' : 'off');
+    const labels = {off:'DESL', semi:'SEMI', full:'TOTAL'};
+    document.getElementById('btn-brk').textContent = 'BRK: ' + labels[state.cwBreakIn];
+    document.getElementById('btn-brk').classList.toggle('active', state.cwBreakIn!=='off');
+  });
+  document.getElementById('cw-cq').addEventListener('click', async ()=>{
+    if(!state.power || !state.callsign) return;
+    const text = `CQ CQ DE ${state.callsign} CQ CQ DE ${state.callsign} K`;
+    const id = 'c'+Date.now()+Math.random().toString(36).slice(2,7);
+    if(state.mode==='CW'){
+      const msg = {id, callsign:state.callsign, ts:Date.now(), type:'cw', mode:'CW', text, level:0.7, tone:state.tone};
+      const sent = await appendMessage(msg);
+      if(sent) addLogEntry(msg, {self:true});
+      playMorse(text, wpmValue());
+    } else {
+      const msg = {id, callsign:state.callsign, ts:Date.now(), type:'text', mode:state.mode, text, level:0.8, tone:state.tone};
+      const sent = await appendMessage(msg);
+      if(sent) addLogEntry(msg, {self:true});
+    }
+  });
+
+  // ---------------- Prosigns / Q-codes ----------------
+  document.querySelectorAll('.prosign-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!state.power || !state.callsign) return;
+      const word = btn.dataset.prosign;
+      const text = word==='QRZ' ? `QRZ DE ${state.callsign}` : `${word} DE ${state.callsign}`;
+      const id = 'p'+Date.now()+Math.random().toString(36).slice(2,7);
+      if(state.mode==='CW'){
+        const msg = {id, callsign:state.callsign, ts:Date.now(), type:'cw', mode:'CW', text, level:0.7, tone:state.tone};
+        const sent = await appendMessage(msg);
+        if(sent) addLogEntry(msg, {self:true});
+        playMorse(text, wpmValue());
+      } else {
+        const msg = {id, callsign:state.callsign, ts:Date.now(), type:'text', mode:state.mode, text, level:0.8, tone:state.tone};
+        const sent = await appendMessage(msg);
+        if(sent) addLogEntry(msg, {self:true});
+      }
+    });
+  });
+
+  // ---------------- text / digital ----------------
+  document.getElementById('text-send').addEventListener('click', sendText);
+  document.getElementById('text-input').addEventListener('keydown', e=>{ if(e.key==='Enter') sendText(); });
+  async function sendText(){
+    if(!state.power) return;
+    const input = document.getElementById('text-input');
+    const text = input.value.trim();
+    if(!text) return;
+    input.value='';
+    const id = 't'+Date.now()+Math.random().toString(36).slice(2,7);
+    const msg = {id, callsign:state.callsign, ts:Date.now(), type:'text', mode:state.mode, text, level:0.8, tone:state.tone};
+    const sent = await appendMessage(msg);
+    if(sent) addLogEntry(msg, {self:true});
+  }
+
+  // ---------------- callsign / server entry ----------------
+  const overlay = document.getElementById('callsign-overlay');
+  const csInput = document.getElementById('callsign-input');
+  const srvInput = document.getElementById('server-input');
+  const pwInput = document.getElementById('password-input');
+  document.getElementById('callsign-submit').addEventListener('click', submitCallsign);
+  csInput.addEventListener('keydown', e=>{ if(e.key==='Enter') submitCallsign(); });
+  srvInput.addEventListener('keydown', e=>{ if(e.key==='Enter') submitCallsign(); });
+  pwInput.addEventListener('keydown', e=>{ if(e.key==='Enter') submitCallsign(); });
+  function submitCallsign(){
+    const v = csInput.value.trim().toUpperCase();
+    const srv = srvInput.value.trim();
+    const pw = pwInput.value;
+    if(!v) return;
+    state.callsign = v;
+    state.password = pw;
+    document.getElementById('my-call').textContent = v;
+    overlay.style.display='none';
+    if(srv){
+      state.serverUrl = srv;
+      connectWS();
+    } else {
+      addSystemLine('Nenhum servidor informado — rodando sem rede (só você ouve suas próprias transmissões).');
+    }
+  }
+
+  // ---------------- entrada direta de frequência ----------------
+  function goToFreqEntry(){
+    if(!state.power) return;
+    const raw = document.getElementById('freq-entry').value.trim().replace(',', '.');
+    const v = parseFloat(raw);
+    if(!isFinite(v) || v<=0){ addSystemLine('Frequência inválida — digite em kHz, ex: 14195.00'); return; }
+    state.freq = Math.max(30, Math.min(470000, v)) * 1000;
+    state.freq = Math.round(state.freq);
+    render();
+  }
+  document.getElementById('freq-entry-go').addEventListener('click', goToFreqEntry);
+  document.getElementById('freq-entry').addEventListener('keydown', e=>{ if(e.key==='Enter') goToFreqEntry(); });
+
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){ hiddenAt = Date.now(); return; }
+    if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+    if(state.serverUrl && wsShouldReconnect){
+      const away = hiddenAt ? Date.now()-hiddenAt : 0;
+      if(!ws || ws.readyState>1){
+        if(wsReconnectTimer){ clearTimeout(wsReconnectTimer); wsReconnectTimer=null; }
+        reconnectAttempt = 0; connectWS();
+      } else if(ws.readyState===1 && away>20000){ try{ ws.close(); }catch(e){} } // conexão pode estar morta: força reconectar
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
